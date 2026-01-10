@@ -51,7 +51,7 @@ def cover_exact_match_score_1(prediction, ground_truth):
     pre_list = normalize_answer(bool_mapping(prediction)).split(" ")
     ground_list = normalize_answer(bool_mapping(ground_truth)).split(" ")
 
-    # 不考虑顺序和连续
+    # Ignore order and adjacency.
     return all(ground in pre_list for ground in ground_list)
 
 
@@ -176,7 +176,7 @@ class MathRuleProxy:
             count_3 = solutions[i].count("<|begin_of_query|>")
             count_4 = solutions[i].count("<|end_of_query|>")
 
-            if "boxed" not in query: #现在来说这只是一个摆设
+            if "boxed" not in query: # Placeholder for now.
                 length_scores.append(0)
             else:
                 length_scores.append(0)
@@ -237,4 +237,4 @@ if __name__ == "__main__":
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
-# python /home/songhuatong/OpenRLHF/openrlhf/cli/server_rm_rag.py --data_path /home/songhuatong/OpenRLHF/data/hotpotqa_rollout_10 --reward_pretrain /home/songhuatong/Qwen2.5-1.5B-Instruct --log_file /home/songhuatong/RAG_RL/rewards/sampling.jsonl --port 1278 --host 127.0.0.1
+# python /PATH/TO/HOME/user/OpenRLHF/openrlhf/cli/server_rm_rag.py --data_path /PATH/TO/HOME/user/OpenRLHF/data/hotpotqa_rollout_10 --reward_pretrain /PATH/TO/HOME/user/Qwen2.5-1.5B-Instruct --log_file /PATH/TO/HOME/user/RAG_RL/rewards/sampling.jsonl --port 1278 --host 127.0.0.1

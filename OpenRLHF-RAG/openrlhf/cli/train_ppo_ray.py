@@ -322,6 +322,12 @@ if __name__ == "__main__":
         default="1.0",
         help="sampling probs for datasets",
     )
+    parser.add_argument(
+        "--balanced_prompt_mixing",
+        action="store_true",
+        default=False,
+        help="Interleave prompt datasets in a balanced round-robin order",
+    )
     parser.add_argument("--prompt_split", type=str, default="train")
     parser.add_argument("--pretrain_data", type=str, default=None, help="HF dataset name or path")
     parser.add_argument(
@@ -336,6 +342,111 @@ if __name__ == "__main__":
     parser.add_argument("--input_template", type=str, default=None)
     parser.add_argument(
         "--apply_chat_template", action="store_true", default=False, help="Use HF tokenizer chat template"
+    )
+
+    # Graph retrieval settings
+    parser.add_argument(
+        "--graph_data_dir",
+        type=str,
+        default=None,
+        help="Path to the processed graph data directory (node_texts.json, etc.)",
+    )
+    parser.add_argument(
+        "--graph_task",
+        type=str,
+        choices=["node", "link"],
+        default="node",
+        help="Type of graph reasoning task. Use 'link' for link prediction JSONLs under data/link_prediction.",
+    )
+    parser.add_argument(
+        "--lp_node_data_root",
+        type=str,
+        default=None,
+        help="Root directory containing node_texts.json for each dataset (required when --graph_task=link).",
+    )
+    parser.add_argument(
+        "--lp_allowed_difficulties",
+        type=str,
+        default="easy,medium,hard",
+        help="Comma-separated list of difficulties kept in link prediction prompts (only used when --graph_task=link).",
+    )
+    parser.add_argument(
+        "--lp_neighbor_seed",
+        type=int,
+        default=20240101,
+        help="Seed controlling random neighbour sampling in link prediction retrieval.",
+    )
+    parser.add_argument(
+        "--graph_encoder_path",
+        type=str,
+        default=None,
+        help="SentenceTransformer model path used when graph embeddings need to be built",
+    )
+    parser.add_argument(
+        "--graph_encoder_device",
+        type=str,
+        default="cpu",
+        help="Device for local graph encoder instantiation when remote service is not used",
+    )
+    parser.add_argument(
+        "--graph_encoder_remote_url",
+        type=str,
+        default=None,
+        help="HTTP endpoint for a remote SentenceTransformer encoding service (expects POST /encode)",
+    )
+    parser.add_argument(
+        "--graph_encoder_remote_timeout",
+        type=float,
+        default=120.0,
+        help="Timeout in seconds for requests to the remote graph encoder",
+    )
+    parser.add_argument(
+        "--graph_max_searches",
+        type=int,
+        default=5,
+        help="Maximum number of graph searches described in the prompt instructions",
+    )
+    parser.add_argument(
+        "--graph_topk",
+        type=int,
+        default=5,
+        help="Default number of neighbours returned per graph retrieval",
+    )
+    parser.add_argument(
+        "--graph_topk_similar",
+        type=int,
+        default=None,
+        help="Override number of neighbours returned for the 'similar' pool (defaults to --graph_topk)",
+    )
+    parser.add_argument(
+        "--graph_topk_one_hop",
+        type=int,
+        default=None,
+        help="Override number of neighbours returned for the '1-hop' pool (defaults to --graph_topk)",
+    )
+    parser.add_argument(
+        "--graph_topk_two_hop",
+        type=int,
+        default=None,
+        help="Override number of neighbours returned for the '2-hop' pool (defaults to --graph_topk)",
+    )
+    parser.add_argument(
+        "--graph_topk_pagerank",
+        type=int,
+        default=None,
+        help="Override number of neighbours returned for the 'pagerank' pool (defaults to --graph_topk)",
+    )
+    parser.add_argument(
+        "--graph_fusion_alpha",
+        type=float,
+        default=0.5,
+        help="Interpolation weight between anchor embedding and query embedding for hop searches",
+    )
+    parser.add_argument(
+        "--graph_reflect_after_docs",
+        action="store_true",
+        default=False,
+        help="After each retrieval block, append a reflection cue encouraging the model to reconsider before issuing another search",
     )
 
     # wandb parameters

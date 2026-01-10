@@ -5,19 +5,19 @@ JOB_NAME=llama-3-8b-instruct-prompt-collection-v0.1-sample_$N_SAMPLES
 
 NODE_RANK=$1
 
-# export TORCH_HOME=/opt/aps/workdir
+# export TORCH_HOME=/PATH/TO/WORKDIR
 export NUMEXPR_MAX_THREADS=128
 export RAY_DEDUP_LOGS=0
 
 # Your wandb token
-wandb_token=0f01b18f7114fec603184083ff6b1d5b5ec1983b
+wandb_token=YOUR_WANDB_TOKEN
 # sudo rm -rf ~/.netrc
 
 # Path of training data
-DATA_PATH=/home/songhuatong/OpenRLHF/data/rl-0121-short_prompt
+DATA_PATH=/PATH/TO/HOME/user/OpenRLHF/data/rl-0121-short_prompt
 
 # Path of backbone model(DeepSeek-R1-Distill-Qwen-1.5B)
-TOKENIZER_PATH=/home/songhuatong/Qwen2.5-0.5B
+TOKENIZER_PATH=/PATH/TO/HOME/user/Qwen2.5-0.5B
 
 # export CUDA_VISIBLE_DEVICES=4,5,0,1
 N_SAMPLES=8
@@ -43,15 +43,15 @@ mkdir -p results/$SAVE_MODEL_NAME/server
 mkdir -p $LOG_BASE/server/
 echo 1111
 # pkill -f server_dpsk_tuple
-# nohup python -m openrlhf.cli.${REWARD_MODEL} --data_path $DATA_PATH --reward_pretrain $TOKENIZER_PATH --log_file /home/songhuatong/rm_results/$SAVE_MODEL_NAME/server/sampling.jsonl --port ${PORT} > $LOG_BASE/server/$SAVE_MODEL_NAME-node$NODE_RANK.log 2>&1 &
+# nohup python -m openrlhf.cli.${REWARD_MODEL} --data_path $DATA_PATH --reward_pretrain $TOKENIZER_PATH --log_file /PATH/TO/HOME/user/rm_results/$SAVE_MODEL_NAME/server/sampling.jsonl --port ${PORT} > $LOG_BASE/server/$SAVE_MODEL_NAME-node$NODE_RANK.log 2>&1 &
 # echo $LOG_BASE/server/$SAVE_MODEL_NAME-node$NODE_RANK.log
 
 deepspeed \
   --include localhost:0,1,4,5 \
   --module openrlhf.cli.train_ppo \
-  --pretrain /home/songhuatong/Qwen2.5-0.5B \
+  --pretrain /PATH/TO/HOME/user/Qwen2.5-0.5B \
   --remote_rm_url http://localhost:1278/get_reward \
-  --save_path /home/songhuatong/RL_Debug/${JOB_NAME} \
+  --save_path /PATH/TO/HOME/user/RL_Debug/${JOB_NAME} \
   --save_steps -1 \
   --logging_steps 1 \
   --eval_steps -1 \
@@ -69,7 +69,7 @@ deepspeed \
   --actor_learning_rate 5e-7 \
   --critic_learning_rate 9e-6 \
   --init_kl_coef 0.001 \
-  --prompt_data /home/songhuatong/OpenRLHF/data/rl-0121-short_prompt \
+  --prompt_data /PATH/TO/HOME/user/OpenRLHF/data/rl-0121-short_prompt \
   --input_key messages \
   --apply_chat_template \
   --max_samples 100000 \

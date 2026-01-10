@@ -1,6 +1,10 @@
+import math
 import os
+import random
+from fractions import Fraction
+from typing import List, Tuple
 
-from datasets import interleave_datasets, load_dataset, load_from_disk
+from datasets import Dataset, interleave_datasets, load_dataset, load_from_disk
 from transformers import AutoTokenizer
 
 
@@ -36,6 +40,84 @@ def get_strategy(args):
         args=args,
     )
     return strategy
+
+
+def _lcm(values: List[int]) -> int:
+    result = 1
+    for value in values:
+        if value == 0:
+            continue
+        result = abs(result * value) // math.gcd(result, value)
+    return max(1, result)
+
+
+def _build_round_robin_pattern(probabilities: List[float]) -> List[int]:
+    fractions: List[Tuple[int, Fraction]] = []
+    for idx, prob in enumerate(probabilities):
+        if prob <= 0:
+            continue
+        fractions.append((idx, Fraction(prob).limit_denominator(1000)))
+
+    if not fractions:
+        return list(range(len(probabilities)))
+
+    lcm_value = _lcm([frac.denominator for _, frac in fractions])
+    pattern: List[int] = []
+    for idx, frac in fractions:
+        count = frac.numerator * (lcm_value // frac.denominator)
+        count = max(1, count)
+        pattern.extend([idx] * count)
+
+    missing = [i for i in range(len(probabilities)) if all(i != idx for idx, _ in fractions)]
+    pattern.extend(missing)
+
+    return pattern or list(range(len(probabilities)))
+
+
+def _balanced_interleave_datasets(dataset_list, probabilities, seed, stopping_strategy):
+    rng = random.Random(seed)
+    shuffled = [ds.shuffle(seed=rng.randint(0, 2**31 - 1)) for ds in dataset_list]
+    lengths = [len(ds) for ds in shuffled]
+    total = sum(lengths)
+    if total == 0:
+        return shuffled[0].select(range(0)) if shuffled else Dataset.from_list([])
+
+    pattern = _build_round_robin_pattern(probabilities)
+    cursors = [0] * len(shuffled)
+    result = []
+    pattern_idx = 0
+
+    def any_exhausted():
+        return any(cur >= length for cur, length in zip(cursors, lengths))
+
+    def all_exhausted():
+        return all(cur >= length for cur, length in zip(cursors, lengths))
+
+    while len(result) < total:
+        if stopping_strategy == "first_exhausted" and any_exhausted():
+            break
+        if stopping_strategy == "all_exhausted" and all_exhausted():
+            break
+
+        dataset_idx = pattern[pattern_idx % len(pattern)]
+        pattern_idx += 1
+        if dataset_idx >= len(shuffled):
+            continue
+
+        if cursors[dataset_idx] >= lengths[dataset_idx]:
+            if stopping_strategy == "first_exhausted":
+                break
+            if all_exhausted():
+                break
+            continue
+
+        result.append(shuffled[dataset_idx][cursors[dataset_idx]])
+        cursors[dataset_idx] += 1
+
+    if not result:
+        return shuffled[0].select(range(0)) if shuffled else Dataset.from_list([])
+
+    return Dataset.from_list(result)
 
 
 def blending_datasets(
@@ -104,19 +186,37 @@ def blending_datasets(
     if strategy.is_rank_0():
         print(train_data_list)
 
-    train_dataset = interleave_datasets(
-        train_data_list,
-        probabilities=probabilities,
-        seed=seed,
-        stopping_strategy=stopping_strategy,
-    )
-    if return_eval:
-        eval_dataset = interleave_datasets(
-            eval_data_list,
+    balanced = bool(strategy and getattr(strategy.args, "balanced_prompt_mixing", False))
+
+    if balanced:
+        train_dataset = _balanced_interleave_datasets(
+            train_data_list,
+            probabilities,
+            seed,
+            stopping_strategy,
+        )
+    else:
+        train_dataset = interleave_datasets(
+            train_data_list,
             probabilities=probabilities,
             seed=seed,
             stopping_strategy=stopping_strategy,
         )
+    if return_eval:
+        if balanced:
+            eval_dataset = _balanced_interleave_datasets(
+                eval_data_list,
+                probabilities,
+                seed,
+                stopping_strategy,
+            )
+        else:
+            eval_dataset = interleave_datasets(
+                eval_data_list,
+                probabilities=probabilities,
+                seed=seed,
+                stopping_strategy=stopping_strategy,
+            )
         return train_dataset, eval_dataset
     else:
         return train_dataset

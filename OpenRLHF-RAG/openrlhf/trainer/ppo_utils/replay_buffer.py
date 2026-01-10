@@ -69,7 +69,7 @@ def split_experience_batch(experience: Experience) -> List[BufferItem]:
             # print("A tensor: ",key)
         else:
             pass
-            # print("Not tensor: ",key) #都不是tensor
+            # print("Not tensor: ",key) # None are tensors.
         assert batch_size == len(vals)
         for i, v in enumerate(vals):
             batch_kwargs[i][key] = v
@@ -253,7 +253,7 @@ class NaiveReplayBuffer(ABC):
             items.append(getattr(item, "advantages"))
             action_masks.append(item.retrieve_mask)
 
-        # print("len_itmes:",len(items)) #更新一次用的prompt？#TODO 看一下这个的含义
+        # print("len_itmes:",len(items)) # Prompt count per update? # TODO: clarify this.
         # list_data_adv = items[0].tolist()
         # print("item-adv[0]: ",list_data_adv, flush=True)
         # list_data_mask = action_masks[0].tolist()
@@ -341,5 +341,4 @@ class NaiveReplayBuffer(ABC):
             #     list_data = ((items[i] - mean) * rstd).tolist()
             #     time.sleep(5)
             #     print("buffer-itmes[0]:",list_data)
-
 

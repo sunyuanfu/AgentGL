@@ -407,7 +407,7 @@ ray job submit --address="http://127.0.0.1:8265" \
 
 **如何加入？**
 
-1. 通过联系邮箱 janhu9527@gmail.com 或者加入 [GitHub Organization](https://github.com/OpenRLHF)。请包含以下信息：
+1. 通过联系邮箱 contact@example.com 或者加入 [GitHub Organization](https://github.com/OpenRLHF)。请包含以下信息：
    - 您的姓名
    - 您的 GitHub 用户名
    - 您感兴趣的领域

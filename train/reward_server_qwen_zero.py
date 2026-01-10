@@ -1,303 +1,228 @@
 import argparse
-import re
 import json
+import os
+import re
+from typing import List, Optional
+
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-import datasets
-import random
+
 from openrlhf.utils.logging_utils import init_logger
-from transformers import AutoTokenizer
-# from symeval import EvaluatorMathBatch
-import sys
-import ujson as json
-import re
-import string
-from collections import Counter
-import pickle
 
 logger = init_logger(__name__)
 
-def normalize_answer(s):
-    def remove_articles(text):
-        return re.sub(r"\b(a|an|the)\b", " ", text)
+ANSWER_PATTERN = re.compile(r"<answer>(.*?)</answer>", re.DOTALL)
+THINK_PATTERN = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+QUERY_PATTERN = re.compile(r"<\|begin_of_query\|>.*?<\|end_of_query\|>", re.DOTALL)
+DOC_PATTERN = re.compile(r"<\|begin_of_documents\|>.*?<\|end_of_documents\|>", re.DOTALL)
 
-    def white_space_fix(text):
-        return " ".join(text.split())
+SEARCH_TAGS = {
+    "1-hop": "<|begin_of_query|>1-hop",
+    "2-hop": "<|begin_of_query|>2-hop",
+    "pagerank": "<|begin_of_query|>pagerank",
+    "similar": "<|begin_of_query|>similar",
+}
 
-    def remove_punc(text):
-        exclude = set(string.punctuation + "".join(["‘", "’", "´", "`"]))
-        return "".join(ch if ch not in exclude else " " for ch in text)
-
-    def lower(text):
-        return text.lower()
-
-    def replace_underscore(text):
-        return text.replace("_", " ")
-
-    return white_space_fix(remove_articles(remove_punc(lower(replace_underscore(s)))))
+MAX_RESPONSE_TOKENS = 2200
 
 
-def bool_mapping(s):
-    if s == "True":
-        return "yes"
-    elif s == "False":
-        return "no"
-    else:
-        return s
-
-def exact_match_score(prediction, ground_truth):
-    return normalize_answer(bool_mapping(prediction)) == normalize_answer(
-        bool_mapping(ground_truth)
-    )
-
-def cover_exact_match_score_1(prediction, ground_truth):
-
-    pre_list = normalize_answer(bool_mapping(prediction)).split(" ")
-    ground_list = normalize_answer(bool_mapping(ground_truth)).split(" ")
-
-    # 不考虑顺序和连续
-    return all(ground in pre_list for ground in ground_list)
-
-def f1_score(prediction, ground_truth):
-    normalized_prediction = normalize_answer(bool_mapping(prediction))
-    normalized_ground_truth = normalize_answer(bool_mapping(ground_truth))
-
-    ZERO_METRIC = (0, 0, 0)
-
-    if (
-        normalized_prediction in ["yes", "no", "noanswer"]
-        and normalized_prediction != normalized_ground_truth
-    ):
-        return ZERO_METRIC
-    if (
-        normalized_ground_truth in ["yes", "no", "noanswer"]
-        and normalized_prediction != normalized_ground_truth
-    ):
-        return ZERO_METRIC
-
-    prediction_tokens = normalized_prediction.split()
-    ground_truth_tokens = normalized_ground_truth.split()
-    common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
-    num_same = sum(common.values())
-    if num_same == 0:
-        return ZERO_METRIC
-    precision = 1.0 * num_same / len(prediction_tokens)
-    recall = 1.0 * num_same / len(ground_truth_tokens)
-    f1 = (2 * precision * recall) / (precision + recall)
-    return f1, precision, recall
+def _normalize_label(text: str) -> str:
+    return re.sub(r"\s+", "", text.strip().lower())
 
 
-def normalize_text(text):
-    text = re.sub("[,.:\"'\[\]\-=\+\\|!@#$%^&*();<>?/！￥…（）—\{\}：”“《》？]", " ", text.lower())
-    text = re.sub("import\s[a-zA-Z\.]+(\sas\s[a-zA-Z\.]+)\n", " ", text)
-    text = re.sub("\s+", " ", text)
-    return text.strip()
+class GraphRewardServer:
+    def __init__(self, args: argparse.Namespace) -> None:
+        data_path = args.data_path
+        if not data_path:
+            raise ValueError("--data_path must point to the graph dataset directory or comma-separated directories")
 
-def strip_sequence(text, pad_token, eos_token):
-    pad_token_escaped = re.escape(pad_token)
-    eos_token_escaped = re.escape(eos_token)
+        # Support comma-separated multiple datasets; concatenate labels by order
+        labels_all: List[str] = []
+        for part in [p.strip() for p in str(data_path).split(",") if p.strip()]:
+            category_path = os.path.join(part, "category.json")
+            if not os.path.exists(category_path):
+                raise FileNotFoundError(f"category.json not found under {part}")
+            with open(category_path, "r", encoding="utf-8") as fp:
+                labels = json.load(fp)
+            if labels and isinstance(labels[0], list):
+                labels = [item[0] for item in labels]
+            labels_all.extend([str(label) for label in labels])
 
-    pattern = f"^({eos_token_escaped}|{pad_token_escaped})+"
-    text = re.sub(pattern, "", text)
+        self.labels: List[str] = labels_all
 
-    pattern = f"({eos_token_escaped}|{pad_token_escaped})+$"
-    text = re.sub(pattern, "", text)
-    return text
-
-
-def extract_answer_math(s):
-    return s.split("<answer>")[-1].split("</answer>")[0].strip()
-
-def normalize_text(text):
-    text = re.sub("[,.:\"'\[\]\-=\+\\|!@#$%^&*();<>?/！￥…（）—\{\}：”“《》？]", " ", text.lower())
-    text = re.sub("import\s[a-zA-Z\.]+(\sas\s[a-zA-Z\.]+)\n", " ", text)
-    text = re.sub("\s+", " ", text)
-    return text.strip()
-
-
-class MathRuleProxy:
-    def __init__(self, args):
-        eval_dataset = datasets.load_from_disk(args.data_path).to_list()
-        self.eval_data_dict = self.get_answer_dict(eval_dataset)
-        print(len(self.eval_data_dict))
-        self.tokenizer = AutoTokenizer.from_pretrained(args.reward_pretrain, trust_remote_code=True, use_fast=True)
         self.log_file = args.log_file
-        self.avg_length_dict = []
-        self.cnt = 0
-        self.avg_len = 5000
-        self.key_words = [
-            "wait",
-            "double check",
-            "what",
-            "how",
-            "why",
-            "alternatively",
-            "think",
-            "rethink",
-            "?",
-            "change",
-            "try",
-            "check",
-        ]
+        if self.log_file:
+            os.makedirs(os.path.dirname(self.log_file), exist_ok=True)
+        logger.info("Loaded %d labels for graph reward server", len(self.labels))
 
-    def get_answer_dict(self, eval_dataset):
-        eval_data_dict = {}
-        for item in eval_dataset:
-            eval_data_dict[normalize_text(item["question"])] = item["answer"]
-        return eval_data_dict
+    # ------------------------------------------------------------------
+    # Scoring helpers
+    # ------------------------------------------------------------------
+    def _extract_answer(self, response: str) -> Optional[str]:
+        match = ANSWER_PATTERN.search(response)
+        if not match:
+            return None
+        return match.group(1).strip()
 
-    def get_qa(self, query):
-        remove_prefix = " ".join(query.split("\n\nUser:")[1:])
-        question = remove_prefix.split("\nAssistant: <think>")[0].strip()
-        solution = query.split("\nAssistant: <think>")[-1].strip()
-        return question, solution
+    def _format_reward(self, response: str) -> float:
+        reward = 0.0
 
-    def get_query_answer(self, query):
-        query = normalize_text(query)
-        return self.eval_data_dict[query]
+        think_ok = response.count("<think>") == 1 and response.count("</think>") == 1
+        answer_ok = response.count("<answer>") == response.count("</answer>") == 1
+        if think_ok and answer_ok:
+            reward += 0.5
+        else:
+            reward -= 0.5
 
-    def get_query_pred(self, query):
-        return extract_answer_math(query)
+        doc_begin = response.count("<|begin_of_documents|>")
+        doc_end = response.count("<|end_of_documents|>")
+        query_begin = response.count("<|begin_of_query|>")
+        query_end = response.count("<|end_of_query|>")
 
-    def get_reward(self, queries):
-        preds = []
-        answers = []
-        questions = []
-        solutions = []
-        finished_lst = []
-        for i in range(len(queries)):
-            queries[i] = (
-                strip_sequence(queries[i], self.tokenizer.pad_token, self.tokenizer.eos_token)
-                + self.tokenizer.eos_token
-            )
-            print(queries[i])
-            question, solution = self.get_qa(queries[i])
-            preds.append(self.get_query_pred(solution))
-            answers.append(self.get_query_answer(question))
+        if doc_begin == doc_end and query_begin == query_end:
+            reward += 0.1
+        else:
+            reward -= 0.3
 
-            questions.append(question)
-            solutions.append(solution)
-        logger.info(f"queries[0]: {queries[0]}")
+        answer_block = self._extract_answer(response) or ""
 
-        scores = []
-        for t in range(len(queries)):
-            f1_score_now, _ , _ = f1_score(preds[t], answers[t])
-            scores.append(float(f1_score_now))
+        if "<|begin_of_query|>" in answer_block or "<|begin_of_documents|>" in answer_block:
+            reward -= 0.5
 
-        length_scores = []
-        pattern_scores = []
-        for i, query in enumerate(queries):
-            self.cnt = self.cnt + 1
-            if "<answer>" not in solutions[i] or "</answer>" not in solutions[i]:
-                scores[i] = 0.0
-                finished_lst.append("0")
-            else:
-                finished_lst.append("1")
+        tokens = answer_block.split()
+        if len(tokens) > 12:
+            reward -= 0.2
 
-            format_punishment=False
-            count_1 = solutions[i].count("<|begin_of_documents|>\n")
-            count_2 = solutions[i].count("<|end_of_documents|>\n\n")
-            count_3 = solutions[i].count("<|begin_of_query|>")
-            count_4 = solutions[i].count("<|end_of_query|>")
-            count_5 = solutions[i].count("<|begin_of_documents|>")
-            count_6 = solutions[i].count("<|end_of_documents|>")
-            count_7 = solutions[i].count("<|begin_of_documents|>\n(1)")
+        if any("<think>" in part for part in answer_block.split("</think>")):
+            reward -= 0.3
 
-            if count_1 == count_2 == count_3 == count_4 == count_5 == count_6 == count_7:
-                pass
-            else:
-                format_punishment=True
+        return reward
 
-            count_assiatant_1 = solutions[i].count("Assistant")
-            count_assiatant_2 = solutions[i].count("assistant")
-            if count_assiatant_1 == count_assiatant_2 ==0:
-                pass
-            else:
-                format_punishment=True
+    def _think_length_reward(self, response: str) -> float:
+        match = THINK_PATTERN.search(response)
+        if not match:
+            return -0.3
 
-            count_think_1 = solutions[i].count("<think>")
-            count_think_2 = solutions[i].count("</think>")
-            if count_think_1 ==0 and count_think_2==1:
-                pass
-            else:
-                format_punishment=True
+        think_block = match.group(1)
+        cleaned = DOC_PATTERN.sub(" ", think_block)
+        segments = [segment.strip() for segment in QUERY_PATTERN.split(cleaned)]
+        if not segments:
+            return -0.3
 
-            count_answer_1 = solutions[i].count("<answer>")
-            count_answer_2 = solutions[i].count("</answer>")
-            if count_answer_1 == count_answer_2==1:
-                pass
-            else:
-                format_punishment=True
+        threshold = 30
+        short_segments = 0
+        for segment in segments:
+            token_count = len(re.findall(r"\S+", segment))
+            if token_count < threshold:
+                short_segments += 1
 
-            answer_text = solutions[i].split("<answer>")[-1].split("</answer>")[0].strip()
-            if "begin_of_query" not in answer_text and "begin_of_documents" not in answer_text:
-                pass
-            else:
-                format_punishment=True
+        if short_segments == 0:
+            return 0.5
 
-            answer_len=len(answer_text.split())
-            if answer_len > 10:
-                format_punishment=True
+        return max(-0.2 * short_segments, -0.6)
 
-            modified_solution = re.sub(r'<\|begin_of_documents\|>.*?<\|end_of_documents\|>', '', solutions[i], flags=re.DOTALL)
-            have_chinese = any('\u4e00' <= char <= '\u9fff' for char in modified_solution)
-            if have_chinese:
-                format_punishment=True
+    # def _search_coverage_reward(self, response: str) -> float:
+    #     matches = QUERY_PATTERN.findall(response)
+    #     search_types: List[str] = []
+    #     for match in matches:
+    #         for name, tag in SEARCH_TAGS.items():
+    #             if match.startswith(tag):
+    #                 search_types.append(name)
+    #                 break
+    #     if not search_types:
+    #         return 0.0
 
+    #     limited = search_types[:5]
+    #     reward = 0.3 * len(limited)
+    #     if len(limited) >= len(SEARCH_TAGS) and len(set(limited)) == len(SEARCH_TAGS):
+    #         reward += 1.0
+    #     return reward
+    
+    def _search_coverage_reward(self, response: str) -> float:
+        coverage = 0.0
+        used_tags = set()
+        for name, tag in SEARCH_TAGS.items():
+            pattern = re.compile(re.escape(tag) + r".*?<\|end_of_query\|>", re.DOTALL)
+            if pattern.search(response or ""):
+                used_tags.add(name)
+        if used_tags:
+            coverage += 0.5 * len(used_tags)
+        return min(coverage, 2.0)
 
-            if format_punishment==True:
-                scores[i] = scores[i]-2
+    def _length_penalty(self, response: str) -> float:
+        token_count = len(re.findall(r"\S+", response or ""))
+        return -0.5 if token_count > MAX_RESPONSE_TOKENS else 0.0
+
+    def _classification_reward(self, predicted: Optional[str], idx: int) -> float:
+        if predicted is None:
+            return -1.0
+        if idx < 0 or idx >= len(self.labels):
+            return -0.5
+        gold = self.labels[idx]
+        return 1.5 if _normalize_label(predicted) == _normalize_label(gold) else 0.0
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+    def score_batch(self, responses: List[str], indices: List[int]) -> List[float]:
+        if len(responses) != len(indices):
+            raise ValueError("Length of responses and idx must match")
+
+        rewards: List[float] = []
+        for response, idx in zip(responses, indices):
+            answer = self._extract_answer(response)
+            reward = self._classification_reward(answer, int(idx))
+            reward += self._format_reward(response)
+            reward += self._think_length_reward(response)
+            reward += self._search_coverage_reward(response)
+            reward += self._length_penalty(response)
+            rewards.append(float(max(min(reward, 15.0), -15.0)))
 
         if self.log_file:
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                for q, a, s, f_f in zip(
-                    questions,
-                    solutions,
-                    scores,
-                    finished_lst,
-                ):
+            with open(self.log_file, "a", encoding="utf-8") as fp:
+                for response, idx, reward in zip(responses, indices, rewards):
                     record = {
-                        "question": q,
-                        "solution": a,
-                        "score": s,
-                        "finished": f_f,
+                        "idx": int(idx),
+                        "reward": reward,
+                        "answer": self._extract_answer(response),
+                        "raw": response,
                     }
-                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    fp.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-        return scores
+        return rewards
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    # Reward Model
-    parser.add_argument("--data_path", type=str, default=None)
-    parser.add_argument("--reward_pretrain", type=str, default=None, help="HF model name or path")
-    parser.add_argument("--port", type=int, default=5001, help="Port number for the server")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="IP for the server")
-    parser.add_argument("--log_file", type=str, default=None, help="Path to JSONL log file")
-
-    args = parser.parse_args()
-
-    # server
-    reward_model = MathRuleProxy(args)
+def create_app(args: argparse.Namespace) -> FastAPI:
+    scorer = GraphRewardServer(args)
     app = FastAPI()
 
     @app.post("/get_reward")
     async def get_reward(request: Request):
         data = await request.json()
-        # print("sht-debug-"*30)
-        # print(data)
-        # print("sht-debug-"*30)
-        queries = data.get("query")
-        # print(queries)
-        # print("sht-debug-"*30)
-        rewards = reward_model.get_reward(queries)
-        result = {"rewards": rewards}
-        logger.info(f"Sent JSON: {result}")
-        return JSONResponse(result)
+        responses = data.get("query", []) or []
+        idx_list = data.get("idx", []) or []
+        if not isinstance(responses, list) or not isinstance(idx_list, list):
+            raise ValueError("query and idx must be lists")
+        rewards = scorer.score_batch(responses, [int(i) for i in idx_list])
+        logger.info("Processed %d responses: avg_reward=%.3f", len(rewards), sum(rewards) / max(len(rewards), 1))
+        return JSONResponse({"rewards": rewards})
 
+    return app
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_path", type=str, required=True, help="Path to graph dataset directory (comma-separated for multiple)")
+    parser.add_argument("--reward_pretrain", type=str, default=None, help="Unused but kept for compatibility")
+    parser.add_argument("--port", type=int, default=5001)
+    parser.add_argument("--host", type=str, default="0.0.0.0")
+    parser.add_argument("--log_file", type=str, default=None, help="Optional JSONL log file")
+    args = parser.parse_args()
+
+    app = create_app(args)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
-# python /home/songhuatong/OpenRLHF/openrlhf/cli/server_rm_rag.py --data_path /home/songhuatong/OpenRLHF/data/hotpotqa_rollout_10 --reward_pretrain /home/songhuatong/Qwen2.5-1.5B-Instruct --log_file /home/songhuatong/RAG_RL/rewards/sampling.jsonl --port 1278 --host 127.0.0.1
+if __name__ == "__main__":
+    main()

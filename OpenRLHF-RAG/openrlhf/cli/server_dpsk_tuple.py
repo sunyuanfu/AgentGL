@@ -216,4 +216,4 @@ if __name__ == "__main__":
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
-# python /home/songhuatong/OpenRLHF/openrlhf/cli/server_dpsk_tuple.py --data_path /home/songhuatong/OpenRLHF/data/still_dataset --reward_pretrain /home/songhuatong/Qwen2.5-1.5B-Instruct --log_file /home/songhuatong/sampling.jsonl --port 1278 --host 127.0.0.1
+# python /PATH/TO/HOME/user/OpenRLHF/openrlhf/cli/server_dpsk_tuple.py --data_path /PATH/TO/HOME/user/OpenRLHF/data/still_dataset --reward_pretrain /PATH/TO/HOME/user/Qwen2.5-1.5B-Instruct --log_file /PATH/TO/HOME/user/sampling.jsonl --port 1278 --host 127.0.0.1

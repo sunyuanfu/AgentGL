@@ -7,7 +7,7 @@ if [[ "${USER}" != "root" ]]; then
     echo ${USER}
     echo ${USER_ID}
 
-    chown ${USER_ID} /home/${USER}
+    chown ${USER_ID} /PATH/TO/HOME/${USER}
     useradd --shell /bin/bash -u ${USER_ID} -o -c "" -m ${USER}
     usermod -a -G root ${USER}
     adduser ${USER} sudo
@@ -15,10 +15,10 @@ if [[ "${USER}" != "root" ]]; then
     # user:password
     echo "${USER}:123" | chpasswd
 
-    export HOME=/home/${USER}
-    export PATH=/home/${USER}/.local/bin/:$PATH
+    export HOME=/PATH/TO/HOME/${USER}
+    export PATH=/PATH/TO/HOME/${USER}/.local/bin/:$PATH
 else
-    export PATH=/root/.local/bin/:$PATH
+    export PATH=/PATH/TO/ROOT/.local/bin/:$PATH
 fi
 
 cd $HOME

@@ -211,7 +211,7 @@ class Actor(nn.Module):
             assert return_output
             return output
 
-        log_probs = log_probs_from_logits(output["logits"][:, :-1, :], sequences[:, 1:]) #表示每个时间步上正确标签的对数概率,[batch_size,seq_len-1]
+        log_probs = log_probs_from_logits(output["logits"][:, :-1, :], sequences[:, 1:]) # Log prob of the correct label per step, [batch_size, seq_len-1].
 
         if not self.packing_samples:
             action_log_probs = log_probs[:, -num_actions:]
@@ -223,7 +223,7 @@ class Actor(nn.Module):
                 start, end = max(0, offset + seq_len - num_action - 1), offset + seq_len - 1
                 action_log_probs.append(log_probs[:, start:end])
                 offset += seq_len
-            action_log_probs = torch.cat(action_log_probs, dim=1) #依次计算
+            action_log_probs = torch.cat(action_log_probs, dim=1) # Concatenate per sequence.
 
         if return_output:
             return (action_log_probs, output)

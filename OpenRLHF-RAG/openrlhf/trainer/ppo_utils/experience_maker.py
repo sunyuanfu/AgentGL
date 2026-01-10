@@ -19,9 +19,85 @@ from openrlhf.models.actor import Actor
 from openrlhf.models.utils import compute_approx_kl, compute_reward, masked_mean, unpacking_samples
 from openrlhf.utils.logging_utils import init_logger
 from openrlhf.utils.remote_rm_utils import remote_rm_fn, remote_rm_fn_ray
+from openrlhf.utils.graph_retriever import GraphRetriever, GraphRetrieverConfig, MultiGraphRetriever
+from openrlhf.utils.link_prediction_retriever import LinkPredictionRetriever
 import re
 from collections import defaultdict
 logger = init_logger(__name__)
+
+
+_GRAPH_RETRIEVER: Optional[GraphRetriever] = None
+
+_REFLECT_PREFIXES = [
+    (("1-hop", "1 hop", "1hop", "one-hop", "one hop"), "1-hop neighbors"),
+    (("2-hop", "2 hop", "2hop", "two-hop", "two hop"), "2-hop neighbors"),
+    (("pagerank", "page rank", "global", "globally important"), "globally important neighbors"),
+    (("similar", "most similar"), "most similar neighbors"),
+]
+
+
+def _describe_search_scope(query_text: Optional[str]) -> str:
+    normalized = (query_text or "").strip().lower()
+    if not normalized:
+        return ""
+    prefix = normalized.split(":", 1)[0].strip()
+    for prefixes, label in _REFLECT_PREFIXES:
+        if any(prefix.startswith(candidate) for candidate in prefixes):
+            return label
+    return ""
+
+
+def _build_reflect_text(query_text: Optional[str]) -> str:
+    scope = _describe_search_scope(query_text)
+    if scope:
+        return (
+            f"Let me first carefully review the retrieved documents of the {scope} "
+            "and decide whether another search is necessary before proceeding.\n\n"
+        )
+    return (
+        "Let me first carefully review the retrieved documents and only request another search "
+        "if it is truly needed for an accurate answer.\n\n"
+    )
+
+
+def get_graph_retriever_from_args(args) -> Optional[GraphRetriever]:
+    global _GRAPH_RETRIEVER
+    if _GRAPH_RETRIEVER is not None:
+        return _GRAPH_RETRIEVER
+
+    data_dir = getattr(args, "graph_data_dir", None)
+    if not data_dir:
+        return None
+
+    if getattr(args, "graph_task", "node") == "link":
+        _GRAPH_RETRIEVER = LinkPredictionRetriever(args)
+        return _GRAPH_RETRIEVER
+
+    config = GraphRetrieverConfig(
+        data_dir=data_dir,
+        encoder_path=getattr(args, "graph_encoder_path", None),
+        default_max_results=getattr(args, "graph_topk", 5),
+        topk_similar=getattr(args, "graph_topk_similar", None),
+        topk_one_hop=getattr(args, "graph_topk_one_hop", None),
+        topk_two_hop=getattr(args, "graph_topk_two_hop", None),
+        topk_pagerank=getattr(args, "graph_topk_pagerank", None),
+        fusion_alpha=getattr(args, "graph_fusion_alpha", 0.5),
+        encoder_device=getattr(args, "graph_encoder_device", "cpu"),
+        encoder_remote_url=getattr(args, "graph_encoder_remote_url", None),
+        encoder_timeout=getattr(args, "graph_encoder_remote_timeout", 60.0),
+    )
+    # Support comma-separated multiple graph datasets
+    if "," in data_dir:
+        parts = [p.strip() for p in data_dir.split(",") if p.strip()]
+        _GRAPH_RETRIEVER = MultiGraphRetriever(parts, config)
+    else:
+        _GRAPH_RETRIEVER = GraphRetriever(config)
+    logger.info(
+        "Loaded graph retriever with %d nodes from %s",
+        _GRAPH_RETRIEVER.num_nodes,
+        data_dir,
+    )
+    return _GRAPH_RETRIEVER
 
 
 # new
@@ -34,20 +110,20 @@ from urllib.request import urlopen
 from urllib.parse import urlparse
 import wikipedia
 from requests.exceptions import Timeout
-from tqdm import tqdm #这个没有
+from tqdm import tqdm # not installed here.
 import time
-import concurrent #这个没有
+import concurrent # not installed here.
 from concurrent.futures import ThreadPoolExecutor
-import pdfplumber #这个没有
+import pdfplumber # not installed here.
 from io import BytesIO
 import re
 import string
 from typing import Optional, Tuple
-#from nltk.tokenize import sent_tokenize #没有，但也没用上
-#import nltk #没有，但也没用上
+#from nltk.tokenize import sent_tokenize # not installed and not used.
+#import nltk # not installed and not used.
 from typing import List
 
-import multiprocessing #没有
+import multiprocessing # not installed here.
 from openai import OpenAI
 import sys
 import os
@@ -212,6 +288,7 @@ class Samples:
     total_length: torch.Tensor
     retrieve_num: torch.Tensor
     pure_response_length: torch.Tensor
+    idx: Optional[List[int]] = None
 
 
 class NaiveExperienceMaker(ABC):
@@ -280,7 +357,7 @@ class NaiveExperienceMaker(ABC):
         After that, we will calculate the advantages and returns for each experience.
         """
         args = self.strategy.args
-        samples_list = self.generate_samples(all_prompts, **generate_kwargs) #vllm生成，这里会给action_mask赋值，改这里 #TODO!!
+        samples_list = self.generate_samples(all_prompts, **generate_kwargs) # vLLM generation; action_mask is set here. TODO: revisit.
         torch.distributed.barrier()
 
         experiences = []
@@ -292,7 +369,7 @@ class NaiveExperienceMaker(ABC):
             experiences.append(self.make_experience(samples).to_device("cpu"))
 
 
-        experiences, rewards = self.process_experiences(experiences) #这一步在干什么 —— 把experience拼成一个整体，方便后续计算mean
+        experiences, rewards = self.process_experiences(experiences) # Concatenate experiences for easier mean computation.
 
         # calculate return and advantages
         for experience, reward in zip(experiences, rewards):
@@ -713,7 +790,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             }
 
 
-        experiences = super().make_experience_list(all_prompts, **generate_kwargs) #一个list，只有[0]是一个tensor，装64个experience
+        experiences = super().make_experience_list(all_prompts, **generate_kwargs) # A list where only [0] is a tensor holding 64 experiences.
         if self.critic is not None:
             for experience in experiences:
                 # send experience to critic
@@ -792,17 +869,34 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             # remote RM
             if not self.packing_samples:
                 queries = self.tokenizer.batch_decode(sequences_cpu, skip_special_tokens=False)
+                idx_list = [int(i) for i in (samples.idx or list(range(len(queries))))]
             else:
-                sequences_list = []
-                offset = 0
                 tokens_list = sequences_cpu.tolist()[0]
-                for length in packed_seq_lens:
-                    sequences_list.append(tokens_list[offset : offset + length])
+                packed_seq_lens_list = (
+                    packed_seq_lens.tolist()
+                    if hasattr(packed_seq_lens, "tolist")
+                    else list(packed_seq_lens)
+                )
+                if isinstance(num_actions, list):
+                    num_actions_list = [int(x) for x in num_actions]
+                else:
+                    num_actions_list = [int(x) for x in num_actions.tolist()]
+
+                idx_source = samples.idx or list(range(len(num_actions_list)))
+
+                queries = []
+                idx_list = []
+                offset = 0
+                for length, actions, idx_value in zip(packed_seq_lens_list, num_actions_list, idx_source):
+                    seq = tokens_list[offset : offset + length]
                     offset += length
-                queries = self.tokenizer.batch_decode(sequences_list, skip_special_tokens=False)
+                    response_tokens = seq[-actions:] if actions > 0 else []
+                    response_text = self.tokenizer.decode(response_tokens, skip_special_tokens=False)
+                    queries.append(response_text)
+                    idx_list.append(int(idx_value))
 
             for rm in self.remote_rm_url:
-                r = remote_rm_fn_ray.remote(rm, queries=queries)
+                r = remote_rm_fn_ray.remote(rm, queries=queries, idx=idx_list)
                 r_refs.append(r)
 
         # log probs
@@ -856,7 +950,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 base_action_log_probs = unpacking_samples(base_action_log_probs, num_actions)
 
             kl = unpacking_samples(kl, num_actions)
-            kl_mean = torch.zeros(len(kl), device=device)  # 预先创建一个张量，长度为 kl 的长度
+            kl_mean = torch.zeros(len(kl), device=device)  # Pre-create a tensor sized to len(kl).
             for i, each_kl in enumerate(kl):
                 # kl_mean[i] = each_kl.mean()
                 kl_mean[i] = masked_mean(each_kl, action_mask,retrieve_mask=retrieve_mask[i], dim=-1,)
@@ -876,6 +970,9 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             "retrieve_num": samples.retrieve_num,
             "pure_response_length": samples.pure_response_length,
         }
+
+        if samples.idx is not None:
+            info["idx"] = torch.tensor(samples.idx, device=device)
 
         if self.strategy.args.perf:
             self.perf_stats["actor_value_rm_time"] += actor_value_rm_time
@@ -1022,7 +1119,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                     end_indices = [g for g, x in enumerate(response_seq) if x == 151658]
                     assert len(start_indices) == len(end_indices), "KL: start_indices and end_indices should have the same length"
                     for start, end in zip(start_indices, end_indices):
-                        for h in range(start, end + 1):  # 包括 end
+                        for h in range(start, end + 1):  # inclusive of end
                             retrieve_mask_now[h] = 0
                     retrieve_mask.extend(retrieve_mask_now)
 
@@ -1082,13 +1179,13 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
         for idx_w_prompt in all_prompts:
             idx, prompt = idx_w_prompt.split("<|idx_prompt_split|>")
             prompts_w_idx_dict.append({"idx": idx, "prompt": prompt})
-        # 从这里开始加检索功能
+        # Retrieval logic starts here.
         # all_prompt_token_ids = self.tokenize_fn(all_prompts, self.prompt_max_len, padding=False)["input_ids"]
         stop_tokens = ["<|end_of_query|>"]
         batch_size = (len(prompts_w_idx_dict) + len(llms) - 1) // len(llms)
         # print("llms-len:",len(llms))
         all_outputs = []
-        for i, llm in enumerate(llms): # 每个llm都执行若干group推理(每个gruop要进行多次rollout)
+        for i, llm in enumerate(llms): # Each LLM runs multiple group inferences (each group does multiple rollouts).
 
             idx_w_prompt_part = prompts_w_idx_dict[i * batch_size : (i + 1) * batch_size]
             # print("idx_w_prompt_part:",idx_w_prompt_part)
@@ -1099,7 +1196,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             finished_all_list=[]
             continued_answer = copy.deepcopy(idx_w_prompt_part)
 
-            for t in range(11): # 每条都执行11次推理，目的就是推理出 完整的 solution，尽可能让需要检索的query全出现
+            for t in range(11): # Run 11 rounds to complete the solution and surface all retrieval queries.
                 finished_texts = []
                 continued_texts = []
                 sampling_params = SamplingParams(temperature=1, top_p=0.95, max_tokens=512, stop=stop_tokens)
@@ -1124,7 +1221,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                     all_token_ids = list(output.prompt_token_ids) + list(output.outputs[0].token_ids)
                     output_token_ids = all_token_ids[len(input_token_ids):]
 
-                    if t == 8: #检索次数太多了，直接停掉，就是未完成
+                    if t == 6: # Too many retrievals; stop early and mark incomplete.
 
                         original_data = {
                             "idx":idx,
@@ -1143,7 +1240,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                         query = generated_text.split("<|begin_of_query|>")[-1].split("<|end_of_query|>")[0]
                         query = query.replace('"',"").strip()
                         query = " ".join(query.split())
-                        if query: #开始检索
+                        if query: # Start retrieval.
                             query_list.append(query)
                             retrieve_num_count += 1
                             original_data = {
@@ -1158,7 +1255,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                                 time.sleep(10)
                             continued_texts.append(original_data)
                             # print("(1)ori-dict:",original_data)
-                        else: #这个是query没有按照规定格式的 ，直接停止了，之后可能需要优化
+                        else: # Query not in required format; stop for now (may need improvement).
                             original_data = {
                             "idx":idx,
                             "prompt_ids":input_token_ids,
@@ -1170,7 +1267,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                                 time.sleep(10)
                             finished_texts.append(original_data)
                             # print("(2)ori-dict:",original_data)
-                    else: #生成结束
+                    else: # Generation finished.
                         original_data = {
                         "idx":idx,
                         "prompt_ids":input_token_ids,
@@ -1185,30 +1282,106 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
 
                 assert len(query_list) == len(continued_texts), "Error in len of query_list and continued_texts"
                 # print("query-list:",query_list)
-                if len(query_list)!=0:
-                    topk = 3
-                    response = requests.post(url_wiki, json={"queries": query_list, "k": topk}) # query_list实际上是query的列表。其它的似乎无法传入列表，要改成循环
-                    if response.status_code == 200:
-                        result = response.json()
-                        answers = result["answers"]
-                        for k in range(len(answers)):
-                            retrieve_docs = answers[k] # answers[0]里包含topk个response。这里的k：第k个查询，第k个答案，一一对应
-                            continued_text_now = copy.deepcopy(continued_texts[k]) #这里为什么是index k
-                            if len(retrieve_docs)>0:
-                                doc_content_list = []
-                                for j in range(len(retrieve_docs)):
-                                    doc_now = re.sub(r'^\d+\s+', '', retrieve_docs[j])
-                                    doc_content_list.append(f"({j+1}){doc_now}\n")
-                                doc_content = ''.join(doc_content_list)
-                            else:
-                                doc_content = "None"
+                if len(query_list) != 0:
+                    graph_retriever = get_graph_retriever_from_args(self.strategy.args)
+                    topk_override = getattr(self.strategy.args, "graph_topk", None)
+                    if topk_override is None:
+                        if graph_retriever is not None:
+                            if hasattr(graph_retriever, "config"):
+                                topk_override = graph_retriever.config.default_max_results
+                            elif getattr(graph_retriever, "partitions", None):
+                                first_part = graph_retriever.partitions[0]
+                                topk_override = first_part.config.default_max_results
+                    if topk_override is None:
+                        topk_override = 5
 
+                    query_node_ids: List[Optional[int]] = []
+                    for entry in continued_texts:
+                        try:
+                            query_node_ids.append(int(entry.get("idx")))
+                        except Exception:
+                            query_node_ids.append(None)
 
-                            continued_text_now["prompt"] = continued_text_now["prompt"] + "<|end_of_query|>\n\n"+ "<|begin_of_documents|>\n" +  doc_content + "<|end_of_documents|>\n\n"
-                            continued_texts[k] = continued_text_now
-                            # print("continued_text_now:",continued_text_now)
+                    neighbors_list: List[List[dict]] = []
+                    if (
+                        graph_retriever is not None
+                        and all(node_id is not None for node_id in query_node_ids)
+                    ):
+                        retrieval_output = graph_retriever.batch_query(
+                            node_ids=[int(node_id) for node_id in query_node_ids],
+                            queries=query_list,
+                        )
+                        neighbors_list = retrieval_output.get("results_batch", [])
                     else:
-                        raise Exception("Error in response: the status code is not 200!")
+                        payload = {
+                            "query": query_list,
+                            "max_results": topk_override,
+                        }
+                        if all(node_id is not None for node_id in query_node_ids):
+                            payload["node_id"] = query_node_ids
+
+                        response = requests.post(url_wiki, json=payload)
+                        if response.status_code != 200:
+                            try:
+                                err = response.json()
+                            except Exception:
+                                err = response.text
+                            raise RuntimeError(
+                                f"Error in response: status {response.status_code}, payload={err}"
+                            )
+                        result = response.json()
+                        neighbors_list = result.get("results_batch") or result.get("answers") or []
+
+                        # Backward compatibility when answers is a list of strings.
+                        if neighbors_list and isinstance(neighbors_list[0], list):
+                            normalized_list = []
+                            for docs in neighbors_list:
+                                normalized_list.append(
+                                    [
+                                        {
+                                            "doc_id": idx + 1,
+                                            "text": doc,
+                                        }
+                                        for idx, doc in enumerate(docs)
+                                    ]
+                                )
+                            neighbors_list = normalized_list
+
+                    for k_idx in range(len(continued_texts)):
+                        continued_text_now = copy.deepcopy(continued_texts[k_idx])
+                        neighbors = neighbors_list[k_idx] if k_idx < len(neighbors_list) else []
+                        cleaned_parts = []
+                        for j, rec in enumerate(neighbors):
+                            if isinstance(rec, dict):
+                                text = rec.get("text") or rec.get("text_preview", "")
+                                rank_val = rec.get("doc_id")
+                            else:
+                                text = str(rec)
+                                rank_val = None
+
+                            text = re.sub(r"^\s*\d+\s+", "", str(text)).strip()
+                            try:
+                                rank_val_int = int(rank_val) if rank_val is not None else None
+                            except (TypeError, ValueError):
+                                rank_val_int = None
+                            header = f"({rank_val_int if rank_val_int is not None else j + 1}) "
+
+                            cleaned_parts.append(f"{header}{text}\n")
+
+                        doc_content = "".join(cleaned_parts) if cleaned_parts else "None"
+
+                        prompt_with_docs = (
+                            continued_text_now["prompt"]
+                            + "<|end_of_query|>\n\n"
+                            + "<|begin_of_documents|>\n"
+                            + doc_content
+                            + "<|end_of_documents|>\n\n"
+                        )
+                        if getattr(self.strategy.args, "graph_reflect_after_docs", False):
+                            query_text = query_list[k_idx] if k_idx < len(query_list) else ""
+                            prompt_with_docs += _build_reflect_text(query_text)
+                        continued_text_now["prompt"] = prompt_with_docs
+                        continued_texts[k_idx] = continued_text_now
 
                 finished_all_list.extend(finished_texts)
                 if len(continued_texts)==0:
@@ -1247,28 +1420,49 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 sequences = []
                 packed_seq_lens = []
                 attention_mask = []
-                retrieve_mask=[]
+                retrieve_mask = []
                 num_actions = []
 
                 retrieve_num = []
                 pure_response_length_lis = []
+                idx_batch: List[int] = []
+                total_limit = 2500
                 for i, output in enumerate(outputs):
                     try:
-                        input_len = len(output["prompt_ids"])
-                        output_len = len(output["response_ids"])
-                        packed_seq_lens.append(input_len + output_len)
-                        sequences.extend(output["prompt_ids"] + output["response_ids"])
-                        attention_mask.extend([i + 1] * (input_len + output_len))
+                        prompt_ids = list(output["prompt_ids"])
+                        response_ids = list(output["response_ids"])
+                        total_len = len(prompt_ids) + len(response_ids)
+                        original_total = total_len
+                        if total_limit and total_len > total_limit:
+                            trim = total_len - total_limit
+                            if trim >= len(response_ids):
+                                trim = len(response_ids) - 1
+                            if trim > 0:
+                                response_ids = response_ids[:-trim]
+                                total_len = len(prompt_ids) + len(response_ids)
+                                if self.strategy.is_rank_0():
+                                    self.strategy.print(
+                                        f"truncate sample idx={output.get('idx', i)}: total_len {original_total} -> {total_len} (limit {total_limit})"
+                                    )
+                        if len(response_ids) == 0:
+                            response_ids = [self.tokenizer.eos_token_id]
+                            total_len = len(prompt_ids) + 1
+                        input_len = len(prompt_ids)
+                        output_len = len(response_ids)
+                        packed_seq_lens.append(total_len)
+                        sequences.extend(prompt_ids + response_ids)
+                        attention_mask.extend([i + 1] * total_len)
 
-                        response_seq = output["response_ids"]
+                        response_seq = response_ids
                         retrieve_mask_now = [1] * len(response_seq)
+                        idx_batch.append(int(output.get("idx", i)))
 
-                        if output["prompt_ids"][0]==128000: #llama
-                            start_tokens = [27,     91,   7413,   3659,  77027,     91,    397]
-                            end_tokens = [ 408,   3659,  77027,     91,   1363]
-                        else: #qwen
-                            start_tokens = [27, 91, 7265, 3575, 75927, 91, 397] #<|begin_of_documents|>\n
-                            end_tokens = [408, 3575, 75927, 91, 1339] #end_of_documents|>\n\n
+                        if prompt_ids and prompt_ids[0] == 128000:  # llama
+                            start_tokens = [27, 91, 7413, 3659, 77027, 91, 397]
+                            end_tokens = [408, 3659, 77027, 91, 1363]
+                        else:  # qwen
+                            start_tokens = [27, 91, 7265, 3575, 75927, 91, 397]
+                            end_tokens = [408, 3575, 75927, 91, 1339]
 
                         is_in_masking = False
                         mask_start_idx = -1
@@ -1277,8 +1471,10 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                         for m in range(len(response_seq)):
                             if retrieve_mask_now[m] == 0:
                                 continue
-                            if not is_in_masking and m + len(start_tokens) <= len(response_seq) and response_seq[m:m + len(start_tokens)] == start_tokens:
-                                start_count += 1  # 增加 start_tokens 计数
+                            if (not is_in_masking
+                                and m + len(start_tokens) <= len(response_seq)
+                                and response_seq[m : m + len(start_tokens)] == start_tokens):
+                                start_count += 1
                                 is_in_masking = True
                                 mask_start_idx = m
                                 for n in range(mask_start_idx, mask_start_idx + len(start_tokens)):
@@ -1286,26 +1482,21 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
 
                             if is_in_masking:
                                 retrieve_mask_now[m] = 0
-                                if m + len(end_tokens) <= len(response_seq) and response_seq[m:m + len(end_tokens)] == end_tokens:
-                                    end_count += 1  # 增加 end_tokens 计数
-                                    is_in_masking = False  # 结束mask
+                                if (m + len(end_tokens) <= len(response_seq)
+                                    and response_seq[m : m + len(end_tokens)] == end_tokens):
+                                    end_count += 1
+                                    is_in_masking = False
                                     for u in range(m, m + len(end_tokens)):
                                         retrieve_mask_now[u] = 0
                                     mask_start_idx = -1
-                        if start_count == end_count == output["retrieve_num_count"]:
-                            pass
-                        else:
-                            print(f"Important Bug!! Model genearte the retrieve symbols!! The num:{[start_count,end_count,output['retrieve_num_count']]},The detailed content:{output}")
-                            time.sleep(3)
-                            # assert start_count == end_count == output["retrieve_num_count"], "Model genearte the retrieve symbols"
 
                         retrieve_mask.extend(retrieve_mask_now)
-                        num_actions.append(max(1, output_len))
-                        retrieve_num.append(output["retrieve_num_count"])
+                        num_actions.append(output_len)
+                        actual_retrieve = min(start_count, end_count, output.get("retrieve_num_count", 0))
+                        retrieve_num.append(float(actual_retrieve))
                         pure_response_length_lis.append(sum(retrieve_mask_now))
                     except Exception as e:
                         print(f"Error occur:{e}, the data: {output},{output['prompt_ids']},{output['response_ids']}")
-
 
                 sequences = torch.tensor(sequences, device="cuda").unsqueeze(0)
                 attention_mask = torch.tensor(attention_mask, device="cuda").unsqueeze(0)
@@ -1323,13 +1514,14 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                         sequences=sequences,
                         attention_mask=attention_mask,
                         action_mask=None,
-                        retrieve_mask = retrieve_mask,
+                        retrieve_mask=retrieve_mask,
                         num_actions=num_actions,
                         packed_seq_lens=packed_seq_lens,
                         response_length=response_length,
                         total_length=total_length,
                         retrieve_num=retrieve_nums,
-                        pure_response_length=pure_response_length
+                        pure_response_length=pure_response_length,
+                        idx=idx_batch,
                     )
                 )
 

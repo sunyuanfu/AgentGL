@@ -47,7 +47,7 @@ def compute_reward(
 ) -> Union[torch.Tensor, list[torch.Tensor]]:
     if kl_coef <= 0.0:
         kl_coef = 0.0
-    print("kl_coef:",kl_coef)
+    # print("kl_coef:",kl_coef)  # Disabled noisy logging.
     # kill
     if reward_clip_range:
         r = r.clamp(min=reward_clip_range[0], max=reward_clip_range[1])
@@ -104,8 +104,8 @@ def compute_reward_new(
     else:
         reward = []
         for i, (kl_seg, action_len) in enumerate(zip(kl, num_actions)):
-            kl_reward = -kl_coef * kl_seg  # 计算 KL 惩罚
-            last_reward = torch.full_like(kl_seg, r[i])  # **修改点：填充整个序列**
+            kl_reward = -kl_coef * kl_seg  # Compute KL penalty.
+            last_reward = torch.full_like(kl_seg, r[i])  # Change: fill the full sequence.
             reward.append(last_reward + kl_reward)
 
     return reward
@@ -127,7 +127,12 @@ def masked_mean(tensor: torch.Tensor, mask: Optional[torch.Tensor], retrieve_mas
         return (tensor * mask).sum(axis=dim) / mask.sum(axis=dim)
     else:
         assert mask is None, "mask and retrieve_mask cannot be used together"
-        return (tensor * retrieve_mask).sum(axis=dim) / retrieve_mask.sum(axis=dim)
+        weight_sum = retrieve_mask.sum(axis=dim)
+        if isinstance(weight_sum, torch.Tensor):
+            weight_sum = weight_sum.clamp_min(1)
+        else:
+            weight_sum = max(weight_sum, 1)
+        return (tensor * retrieve_mask).sum(axis=dim) / weight_sum
 
 
 def masked_normalize(tensor: torch.Tensor, mask: torch.Tensor, dim: int = 1, eps: float = 1e-8) -> torch.Tensor:

@@ -2,21 +2,21 @@
 
 # NODE_RANK=$1
 
-# export TORCH_HOME=/opt/aps/workdir
+# export TORCH_HOME=/PATH/TO/WORKDIR
 export NUMEXPR_MAX_THREADS=128
 export RAY_DEDUP_LOGS=0
 
 # Your wandb token
-wandb_token=xx
+wandb_token=YOUR_WANDB_TOKEN
 # sudo rm -rf ~/.netrc
-export WANDB_API_KEY=xx
+export WANDB_API_KEY=${wandb_token}
 
 # Path of training data
 DATA_PATH=xx
-# /home/songhuatong/OpenRLHF/data/demo_dataset
+# /PATH/TO/HOME/user/OpenRLHF/data/demo_dataset
 #
 # Path of backbone model(DeepSeek-R1-Distill-Qwen-1.5B)
-TOKENIZER_PATH=/opt/aps/workdir/model/Qwen2.5-7B
+TOKENIZER_PATH=/PATH/TO/WORKDIR/model/Qwen2.5-7B
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 N_SAMPLES=16
 EPISODE=10000
@@ -36,16 +36,16 @@ GROUP_METHOD=normal
 
 LOG_BASE=log
 
-mkdir -p /opt/aps/workdir/sht-RAG_RL/results/$SAVE_MODEL_NAME
-mkdir -p /opt/aps/workdir/sht-RAG_RL/results/ckpts
-mkdir -p /opt/aps/workdir/sht-RAG_RL/results/$SAVE_MODEL_NAME/server
+mkdir -p /PATH/TO/WORKDIR/rag_rl/results/$SAVE_MODEL_NAME
+mkdir -p /PATH/TO/WORKDIR/rag_rl/results/ckpts
+mkdir -p /PATH/TO/WORKDIR/rag_rl/results/$SAVE_MODEL_NAME/server
 mkdir -p $LOG_BASE/server/
 
 # pkill -f ${REWARD_MODEL}
-# nohup python -m openrlhf.cli.${REWARD_MODEL} --data_path $DATA_PATH --reward_pretrain $TOKENIZER_PATH --log_file /opt/aps/workdir/RAG_RL/results/$SAVE_MODEL_NAME/server/sampling.jsonl --port ${PORT} > $LOG_BASE/server/$SAVE_MODEL_NAME-node$NODE_RANK.log 2>&1 &
+# nohup python -m openrlhf.cli.${REWARD_MODEL} --data_path $DATA_PATH --reward_pretrain $TOKENIZER_PATH --log_file /PATH/TO/WORKDIR/RAG_RL/results/$SAVE_MODEL_NAME/server/sampling.jsonl --port ${PORT} > $LOG_BASE/server/$SAVE_MODEL_NAME-node$NODE_RANK.log 2>&1 &
 # echo $LOG_BASE/server/$SAVE_MODEL_NAME-node$NODE_RANK.log
 
-ray job submit --address="http://127.0.0.1:8267" \
+ray job submit --address="http://10.119.20.150" \
    -- python3 -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 1 \
    --ref_num_gpus_per_node 4 \
@@ -56,8 +56,8 @@ ray job submit --address="http://127.0.0.1:8267" \
    --colocate_actor_ref \
    --pretrain ${TOKENIZER_PATH} \
    --remote_rm_url http://localhost:${PORT}/get_reward \
-   --save_path /opt/aps/workdir/sht-RAG_RL/results/ckpts/$SAVE_MODEL_NAME \
-   --ckpt_path /opt/aps/workdir/sht-RAG_RL/results/ckpts/$SAVE_MODEL_NAME \
+   --save_path /PATH/TO/WORKDIR/rag_rl/results/ckpts/$SAVE_MODEL_NAME \
+   --ckpt_path /PATH/TO/WORKDIR/rag_rl/results/ckpts/$SAVE_MODEL_NAME \
    --micro_train_batch_size 1 \
    --train_batch_size ${TBS} \
    --micro_rollout_batch_size 1 \

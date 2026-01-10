@@ -47,7 +47,6 @@ openrlhf/trainer/sft_trainer.py
 openrlhf/trainer/ppo_utils/__init__.py
 openrlhf/trainer/ppo_utils/experience_maker.bak.py
 openrlhf/trainer/ppo_utils/experience_maker.py
-openrlhf/trainer/ppo_utils/experience_maker_rag.py
 openrlhf/trainer/ppo_utils/kl_controller.py
 openrlhf/trainer/ppo_utils/replay_buffer.py
 openrlhf/trainer/ray/__init__.py
@@ -60,6 +59,7 @@ openrlhf/trainer/ray/vllm_worker_wrap.py
 openrlhf/utils/__init__.py
 openrlhf/utils/distributed_sampler.py
 openrlhf/utils/distributed_util.py
+openrlhf/utils/graph_retriever.py
 openrlhf/utils/logging_utils.py
 openrlhf/utils/processor.py
 openrlhf/utils/remote_rm_utils.py

@@ -1,4 +1,4 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.4
 Name: openrlhf
 Version: 0.5.5.post2
 Summary: A Ray-based High-performance RLHF framework.
@@ -13,21 +13,25 @@ License-File: LICENSE
 Requires-Dist: accelerate
 Requires-Dist: bitsandbytes
 Requires-Dist: datasets
-Requires-Dist: deepspeed==0.15.0
+Requires-Dist: deepspeed==0.18.2
 Requires-Dist: einops
-Requires-Dist: flash-attn==2.7.0.post2
+Requires-Dist: flash-attn==2.8.3
+Requires-Dist: grpcio>=1.74.0
 Requires-Dist: isort
 Requires-Dist: jsonlines
 Requires-Dist: loralib
 Requires-Dist: optimum
+Requires-Dist: optree>=0.13.0
 Requires-Dist: packaging
 Requires-Dist: peft
-Requires-Dist: ray[default]==2.12.0
+Requires-Dist: pynvml>=12.0.0
+Requires-Dist: ray[default]==2.48.0
 Requires-Dist: tensorboard
 Requires-Dist: torch
+Requires-Dist: torchdata
 Requires-Dist: torchmetrics
 Requires-Dist: tqdm
-Requires-Dist: transformers==4.46.3
+Requires-Dist: transformers==4.57.0
 Requires-Dist: transformers_stream_generator
 Requires-Dist: wandb
 Requires-Dist: wheel
@@ -38,6 +42,7 @@ Requires-Dist: vllm>0.6.5; extra == "vllm-latest"
 Dynamic: classifier
 Dynamic: description
 Dynamic: description-content-type
+Dynamic: license-file
 Dynamic: provides-extra
 Dynamic: requires-dist
 Dynamic: requires-python
@@ -443,7 +448,7 @@ To achieve optimal performance, we recommend allocating more nodes to the vLLM E
 
 **How to Join?**
 
-1. Email us at janhu9527@gmail.com or join [GitHub Organization](https://github.com/OpenRLHF). Please include the following details:
+1. Email us at contact@example.com or join [GitHub Organization](https://github.com/OpenRLHF). Please include the following details:
    - Your name
    - Your GitHub username
    - Your areas of interest

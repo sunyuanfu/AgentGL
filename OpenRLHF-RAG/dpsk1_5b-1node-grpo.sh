@@ -2,19 +2,19 @@
 
 NODE_RANK=$1
 
-# export TORCH_HOME=/opt/aps/workdir
+# export TORCH_HOME=/PATH/TO/WORKDIR
 export NUMEXPR_MAX_THREADS=128
 export RAY_DEDUP_LOGS=0
 
 # Your wandb token
-wandb_token=0f01b18f7114fec603184083ff6b1d5b5ec1983b
+wandb_token=YOUR_WANDB_TOKEN
 # sudo rm -rf ~/.netrc
 
 # Path of training data
-DATA_PATH=/home/songhuatong/OpenRLHF/data/demo_dataset
+DATA_PATH=/PATH/TO/HOME/user/OpenRLHF/data/demo_dataset
 
 # Path of backbone model(DeepSeek-R1-Distill-Qwen-1.5B)
-TOKENIZER_PATH=/home/songhuatong/Qwen2-1.5B-Instruct
+TOKENIZER_PATH=/PATH/TO/HOME/user/Qwen2-1.5B-Instruct
 
 export CUDA_VISIBLE_DEVICES=6,7,8,9
 N_SAMPLES=8
@@ -45,8 +45,8 @@ echo $LOG_BASE/server/$SAVE_MODEL_NAME-node$NODE_RANK.log
 
 if [ "$NODE_RANK" = "0" ]; then
 ray job submit --address="http://127.0.0.1:8267" \
-   --runtime-env-json='{"working_dir": "/home/songhuatong/OpenRLHF", "RAY_DEDUP_LOGS": 0, "OMP_NUM_THREADS": 1, "OPENBLAS_NUM_THREADS": 1}' \
-   -- /home/songhuatong/miniconda3/envs/openrlhf/bin/python -m openrlhf.cli.train_ppo_ray \
+   --runtime-env-json='{"working_dir": "/PATH/TO/HOME/user/OpenRLHF", "RAY_DEDUP_LOGS": 0, "OMP_NUM_THREADS": 1, "OPENBLAS_NUM_THREADS": 1}' \
+   -- /PATH/TO/HOME/user/miniconda3/envs/openrlhf/bin/python -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 1 \
    --ref_num_gpus_per_node 2 \
    --actor_num_nodes 1 \
@@ -96,4 +96,4 @@ fi
 #    --enable_ema \
 #    --load_checkpoint
 
-# python /home/songhuatong/OpenRLHF/openrlhf/cli/server_dpsk_tuple.py --data_path /home/songhuatong/OpenRLHF/data/rl-0121-short_prompt --reward_pretrain /home/songhuatong/Qwen2.5-0.5B --log_file /home/songhuatong/OpenRLHF/data/sampling.jsonl --port 1278
+# python /PATH/TO/HOME/user/OpenRLHF/openrlhf/cli/server_dpsk_tuple.py --data_path /PATH/TO/HOME/user/OpenRLHF/data/rl-0121-short_prompt --reward_pretrain /PATH/TO/HOME/user/Qwen2.5-0.5B --log_file /PATH/TO/HOME/user/OpenRLHF/data/sampling.jsonl --port 1278

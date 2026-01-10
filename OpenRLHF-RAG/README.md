@@ -398,7 +398,7 @@ To achieve optimal performance, we recommend allocating more nodes to the vLLM E
 
 **How to Join?**
 
-1. Email us at janhu9527@gmail.com or join [GitHub Organization](https://github.com/OpenRLHF). Please include the following details:
+1. Email us at contact@example.com or join [GitHub Organization](https://github.com/OpenRLHF). Please include the following details:
    - Your name
    - Your GitHub username
    - Your areas of interest

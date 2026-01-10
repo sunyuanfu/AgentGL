@@ -1,4 +1,4 @@
-# source /opt/aps/workdir/input/jiechen/.venv/bin/activate
+# source /PATH/TO/WORKDIR/input/user/.venv/bin/activate
 export CUDA_VISIBLE_DEVICES=6,7,8,9
 
 # conda activate openrlhf

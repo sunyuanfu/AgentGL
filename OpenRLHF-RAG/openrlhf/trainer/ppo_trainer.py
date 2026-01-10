@@ -188,7 +188,7 @@ class PPOTrainer(ABC):
         consumed_samples=0,
         num_update_steps_per_episodes=1,
     ) -> None:
-        # jjh add >>>
+        # custom add >>>
         print(num_update_steps_per_episodes, args.train_batch_size, args.max_epochs, args.rollout_batch_size, args.n_samples_per_prompt)
         # <<<
         num_rollouts_per_episodes = (
@@ -210,7 +210,7 @@ class PPOTrainer(ABC):
 
         # Restore step and start_epoch
         steps = consumed_samples // args.rollout_batch_size + 1
-        # jjh add >>>
+        # custom add >>>
         print(args.rollout_batch_size, num_rollouts_per_episodes)
         # <<<
         start_episode = consumed_samples // args.rollout_batch_size // num_rollouts_per_episodes
@@ -243,11 +243,7 @@ class PPOTrainer(ABC):
                 for i, experience in enumerate(
                     self.experience_maker.make_experience_list(rand_prompts, **self.generate_kwargs)
                 ):
-                    # if i == 0:
-                    #     output = self.tokenizer.batch_decode(
-                    #         experience.sequences[0].unsqueeze(0), skip_special_tokens=True
-                    #     )
-                    #     self.strategy.print(output) #这里没有任何影响
+
                     self.replay_buffer.append(experience)
 
                 torch.cuda.empty_cache()
@@ -351,7 +347,7 @@ class PPOTrainer(ABC):
 
         # TODO: this is a bad indicator to say that data is packed...
         if isinstance(experience.sequences, list):
-            #这是packed 分支
+            # Packed branch
             sequences = torch.cat(experience.sequences, dim=0).unsqueeze(0)
             old_action_log_probs = torch.cat(experience.action_log_probs, dim=0).unsqueeze(0)
             advantages = torch.cat(experience.advantages, dim=0).unsqueeze(0)
@@ -387,7 +383,7 @@ class PPOTrainer(ABC):
             action_log_probs,
             old_action_log_probs,
             advantages,
-            action_mask=experience.action_mask, #对于packing的，这个是none
+            action_mask=experience.action_mask, # For packing, this is None.
             retrieve_mask=retrieve_mask,
         )
 
@@ -465,8 +461,10 @@ class PPOTrainer(ABC):
                 status[k] = (
                     (v * experience.info["response_length"]).sum() / experience.info["response_length"].sum()
                 ).item()
+            elif k == "idx":                 # New field
+                status[k] = v.tolist()       # Or int(v[0]); used for logging only.
             else:
-                status[k] = v.mean().item()
+                status[k] = v.float().mean().item()
         return status
 
     def training_step_critic(self, experience: Experience) -> Dict[str, float]:

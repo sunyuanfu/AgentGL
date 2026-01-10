@@ -3,8 +3,8 @@
 # # print(len(a))
 # # print(len(a['query']))
 # # exit()
-# # 设置 API 的 URL
-# url = "http://0.0.0.0:1278/get_reward"  # 这里假设你的 FastAPI 服务运行在本地的 5001 端口
+# # Set the API URL.
+# url = "http://0.0.0.0:1278/get_reward"  # Assumes the FastAPI service runs locally on port 5001.
 
 
 # def request_api_wrapper(url, data, score_key="rewards", try_max_times=5):
@@ -30,7 +30,7 @@
 # scores = request_api_wrapper(url, a, "rewards")
 # print(scores)
 
-# # 创建请求数据（问题列表）
+# # Build the request payload (question list).
 # # data=a
 # # data = {
 # #     "query": [
@@ -41,12 +41,12 @@
 # # }
 # # data =a
 # # print(data)
-# # # 发送 POST 请求到 API
+# # # Send a POST request to the API.
 # # response = requests.post(url, json=data)
 
-# # # 打印返回的结果
+# # # Print the returned results.
 # # if response.status_code == 200:
-# #     result = response.json()  # 解析 JSON 响应
+# #     result = response.json()  # Parse the JSON response.
 # #     print("Received rewards:", result["rewards"])
 # # else:
 # #     print(f"Error: {response.status_code}, {response.text}")

@@ -13,7 +13,7 @@
 
 # project settings
 OPENRLHF_PATH=<OPENRLHF_ROOT_PATH>
-MOUNT="$OPENRLHF_PATH:/openrlhf,$HOME/.cache:/root/.cache"
+MOUNT="$OPENRLHF_PATH:/openrlhf,$HOME/.cache:/PATH/TO/ROOT/.cache"
 IMAGE_NAME="nvcr.io/nvidia/pytorch:24.07-py3"
 RAY_VERSION=2.12.0
 
@@ -34,7 +34,7 @@ echo "IP Head: $ip_head"  &>> ${JOBLOG}
 echo "STARTING HEAD at $node_1"  &>> ${JOBLOG}
 srun --nodes=1 --ntasks=1 -w "$node_1" --container-image="$IMAGE_NAME" --container-mounts="$MOUNT" bash -c \
 && pip install ray[default]==$RAY_VERSION \
-&& /root/.local/bin/ray start --head --node-ip-address=$ip --port=$port --block" &>> ${JOBLOG} &
+&& /PATH/TO/ROOT/.local/bin/ray start --head --node-ip-address=$ip --port=$port --block" &>> ${JOBLOG} &
 sleep 10s
 
 worker_num=$((SLURM_JOB_NUM_NODES)) #number of nodes other than the head node
@@ -43,7 +43,7 @@ node_i=${nodes_array[$i]}
 echo "STARTING WORKER $i at $node_i"  &>> ${JOBLOG}
 srun --nodes=1 --ntasks=1 -w "$node_i" --container-image="$IMAGE_NAME" --container-mounts="$MOUNT" bash -c \
     && pip install ray[default]==$RAY_VERSION \
-    && /root/.local/bin/ray start --address "$ip_head" --block" &>> ${JOBLOG} &
+    && /PATH/TO/ROOT/.local/bin/ray start --address "$ip_head" --block" &>> ${JOBLOG} &
 sleep 1s;
 done
 
@@ -53,7 +53,7 @@ sleep 30s
 # Job start
 srun --overlap --nodes=1 --ntasks=1 -w "$node_1" --container-image="$IMAGE_NAME" --container-mounts="$MOUNT" bash -c \
 "pip install ray[default]==$RAY_VERSION \
-&& /root/.local/bin/ray job submit --address=http://localhost:8265 \
+&& /PATH/TO/ROOT/.local/bin/ray job submit --address=http://localhost:8265 \
     --runtime-env-json='{\"working_dir\": \"/openrlhf\", \"pip\": \"/openrlhf/requirements.txt\"}' \
     -- python3 -m openrlhf.cli.train_ppo_ray \
     --ref_num_nodes 1 \
