@@ -40,7 +40,7 @@
 ## Acknowledgements
 
 1. We thank **[OpenRLHF][openrlhf]** for providing an easy-to-use RL training framework.  
-2. We thank **[R1-Searcher][r1-searcher]** for supporting and inspiring the search-related extensions.  
+2. We thank **[R1-Searcher][r1-searcher]** for the code implementations of the search-related extensions.  
    Thank you for your wonderful work!
 
 [openrlhf]: https://github.com/OpenRLHF/OpenRLHF
