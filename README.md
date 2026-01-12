@@ -11,7 +11,7 @@
 ## To Reviewers
 
 1. **Typo in the paper (Subsection 4.3).**  
-   We noticed a typo in the paper: <span style="color:red"><b>"Training Proces" → "Training Process"</b></span>.  
+   We noticed a typo in the paper: <span style="color:red"><b>"Training Proces" → "Training Process"</b></span>.
    Due to the tight submission deadline, we accidentally removed an extra **"s"** during the final revision. We sincerely apologize and hope this does not affect your understanding of our method.
 
 2. **Code usage during the review period.**  
