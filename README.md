@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="AgentGL Logo" width="180" />
+  <img src="assets/logo.png" alt="AgentGL Logo" width="900" />
 </p>
 
 <p align="center">
