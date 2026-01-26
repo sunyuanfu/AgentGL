@@ -15,7 +15,7 @@
 
    * <span style="color:red"><b>"Training Proces" → "Training Process"</b></span> (Subsection 4.3)
    * <span style="color:red"><b>"SSO" → "MSO"</b></span> (Table 2)
-   * <span style="color:red"><b>λₛ → λᵣ</b></span>
+   * <span style="color:red"><b>"λₛ" → "λᵣ"</b></span> (Table 4)
 
    Due to the tight submission deadline, these slipped through during the final revision. We sincerely apologize for the confusion and hope this does not affect your understanding of our method. We will correct them in the final version.
 
