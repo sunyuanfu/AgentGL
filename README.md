@@ -10,9 +10,14 @@
 
 ## To Reviewers
 
-1. **Typo in the paper (Subsection 4.3).**  
-   We noticed a typo in the paper: <span style="color:red"><b>"Training Proces" → "Training Process"</b></span>.
-   Due to the tight submission deadline, we accidentally removed an extra **"s"** during the final revision. We sincerely apologize and hope this does not affect your understanding of our method. We will fix it in our final version.
+1. **Typos in the paper (Subsection 4.3, Table 2, Table 4).**
+   We noticed a few typos in the paper:
+
+   * <span style="color:red"><b>"Training Proces" → "Training Process"</b></span> (Subsection 4.3)
+   * <span style="color:red"><b>"SSO" → "MSO"</b></span> (Table 2)
+   * <span style="color:red"><b>"(\lambda_s)" → "(\lambda_r)"</b></span> (Table 4)
+
+   Due to the tight submission deadline, these slipped through during the final revision. We sincerely apologize for the confusion and hope this does not affect your understanding of our method. We will correct them in the final version.
 
 2. **Code usage during the review period.**  
    This codebase is intended only for the review process. We retain the core implementation and replace paths/configs with placeholders for anonymization and sanitization.  
