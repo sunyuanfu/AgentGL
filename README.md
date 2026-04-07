@@ -1,4 +1,4 @@
-# AgentGL: Towards Agentic Graph Learning with LLMs viaReinforcement Learning
+# AgentGL: Towards Agentic Graph Learning with LLMs via Reinforcement Learning
 
 We are actively organizing and refining our codebase to make it clean, stable, and easy to reproduce.
 
