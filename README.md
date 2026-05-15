@@ -35,7 +35,7 @@ AgentGL/
   train/                          # reward servers and runtime services
 ```
 
-The graph artifact directory is separate from generated JSONL files. Set `AGENTGL_NODE_DATA_ROOT` to a directory named `node_data` containing per-dataset folders such as `ogbn-arxiv/`, `ogbn-products/`, `amazon-photo/`, etc. Each folder is expected to contain graph files such as `node_texts.json`, `category.json`, `first_hop_indices.json`, and cached embeddings if available.
+The graph artifact directory is separate from generated JSONL files. Set `AGENTGL_NODE_DATA_ROOT` to a directory named `node_data` containing per-dataset folders such as `ogbn-arxiv/`, `ogbn-products/`, `amazon-photo/`, etc. Each folder is expected to contain graph files such as `node_texts.json`, `category.json`, `first_hop_indices.json`, and cached embeddings if available (you can download this data based on the instrcutiuons in **Data Construction**). 
 
 ## Installation
 
