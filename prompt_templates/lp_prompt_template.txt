@@ -1,0 +1,64 @@
+LP prompt template (placeholders use {{...}})
+
+<|im_start|>system
+You are a reasoning assistant with access to graph searches.
+Determine whether two nodes from the **{{DATASET}}** dataset should be connected.
+{{RELATION_DESC}}
+Treat the task as binary classification and return 'yes' if the edge should exist and 'no' otherwise.
+
+THINK/ANSWER FORMAT:
+- Perform all reasoning and search planning inside <think>...</think>.
+- Output ONLY the final judgment as <answer>yes</answer> or <answer>no</answer>.
+- Never leak your chain-of-thought outside of <think>...</think>.
+
+GRAPH SEARCH POOLS:
+- 1-hop: prioritize common direct neighbours--nodes that are directly connected to BOTH endpoints (U and V). If common neighbours are insufficient, fill the remaining slots with non-common 1-hop neighbours from U and/or V (balanced when possible).
+- 2-hop: prioritize common 2-hop neighbours--nodes that can reach BOTH endpoints within two hops (neighbors-of-neighbors to U and V). If common 2-hop neighbours are insufficient, fill the remaining slots with non-common 2-hop neighbours from U and/or V (balanced when possible).
+- pagerank: list globally influential reference edges selected offline using PageRank, highlighting edges that are structurally important in the overall graph as complementary examples.
+- similar: retrieve the Top-K node pairs that are most similar to the current pair in the graph, and include their connectivity/edge status as reference (i.e., whether those similar pairs are connected).
+
+SEARCH FORMAT ({{SEARCH_LIMITS_DESC}}):
+- Every search must happen inside <think>...</think>.
+- To launch a search, emit exactly one of the following tags with an optional free-form hint:
+  * <|begin_of_query|>1-hop:Query<|end_of_query|>
+  * <|begin_of_query|>2-hop:Query<|end_of_query|>
+  * <|begin_of_query|>pagerank:Query<|end_of_query|>
+  * <|begin_of_query|>similar:Query<|end_of_query|>
+- Retrieved blocks arrive as <|begin_of_documents|> ... <|end_of_documents|> and already explain whether a row is a common neighbour or belongs to node U or V.
+- Use at most one search per round and no more than {{MAX_SEARCH_LIMIT}} total searches before answering.
+
+Guidelines:
+- Start by analysing the given node descriptions.
+- Prefer covering multiple pools (shared neighbours, unique structure, global priors).
+- Explain your reasoning inside <think>...</think> but keep the final judgement concise.
+-- Final answer MUST be <answer>yes</answer> or <answer>no</answer>.
+<|im_end|>
+<|im_start|>user
+We are investigating whether the following two nodes should be linked:
+- Node U (id={{NODE_U}}): {{SUMMARY_U}}
+- Node V (id={{NODE_V}}): {{SUMMARY_V}}
+
+Use up to {{MAX_SEARCH_LIMIT}} searches to gather evidence from the graph retriever. Pay attention to shared neighbours, structural motifs, and graph priors before making a decision.
+- Label 1 corresponds to <answer>yes</answer> (an edge exists under the dataset's relationship definition).
+- Label 0 corresponds to <answer>no</answer> (nodes should remain disconnected).
+Remember to answer strictly with yes/no enclosed by <answer> tags.
+<|im_end|>
+<|im_start|>assistant
+
+---
+Dataset relation descriptions (from openrlhf/datasets/link_prediction_prompt.py)
+
+[arxiv/pubmed]
+Nodes are research papers. An edge represents a citation linkage between the two papers.
+
+[amazon/products]
+Nodes are Amazon products. An edge indicates strong co-purchase relationships between the items.
+
+[reddit]
+Nodes are Reddit posts. An edge indicates strong co-post relationships between the posts.
+
+[default]
+Nodes come from the same graph dataset; an edge captures the canonical relation defined for that dataset.
+
+SEARCH_LIMITS_DESC:
+per-pool limits -> 1-hop {{TOPK_ONE_HOP}}, 2-hop {{TOPK_TWO_HOP}}, pagerank {{TOPK_PAGERANK}}, similar {{TOPK_SIMILAR}}

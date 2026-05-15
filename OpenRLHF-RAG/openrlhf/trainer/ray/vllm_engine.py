@@ -3,7 +3,7 @@ from ray.util.placement_group import placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 from openrlhf.trainer.ray.utils import ray_noset_visible_devices
-
+from packaging import version
 from openrlhf.utils.logging_utils import init_logger
 
 logger = init_logger(__name__)
@@ -22,7 +22,9 @@ class LLMRayActor:
         import vllm
 
         self.__version__ = vllm.__version__
-        assert self.__version__ >= "0.4.2", "OpenRLHF only supports vLLM >= 0.4.2"
+        if version.parse(self.__version__) < version.parse("0.4.2"):
+            raise AssertionError(f"OpenRLHF only supports vLLM >= 0.4.2, but found {self.__version__}")
+
 
         noset_visible_devices = kwargs.pop("noset_visible_devices", False)
         self.use_gpu_executor = kwargs["tensor_parallel_size"] == 1 and not noset_visible_devices

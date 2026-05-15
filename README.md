@@ -1,206 +1,349 @@
+<h1 align="center">AgentGL: Towards Agentic Graph Learning with LLMs via Reinforcement Learning</h1>
 
-<h1 align="center"> R1-searcher:  Incentivizing the Search Capability in LLMs via Reinforcement Learning</a></h1>
+<p align="center">
+  <a href="https://arxiv.org/abs/2604.05846">
+    <img src="https://img.shields.io/badge/Paper-arXiv%3A2604.05846-b31b1b?style=for-the-badge&logo=arxiv&logoColor=white" alt="Paper">
+  </a>
+</p>
 
+<p align="center">
+  <img src="cover.png" alt="AgentGL overview" width="100%">
+</p>
 
-<div align="center">
-<a href="https://github.com/RUCAIBox/RLRAG/edit/main//LICENSE"><img src="https://img.shields.io/badge/Code_License-MIT-blue" alt="license"></a>
-<a href="https://github.com/RUCAIBox/RLRAG/edit/main//LICENSE"><img src="https://img.shields.io/badge/Model_License-MIT-blue" alt="license"></a>
-<a href="[https://huggingface.co/collections/yulan-team/yulan-mini-676d214b24376739b00d95f3](https://github.com/RUCAIBox/RLRAG)"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-blue?color=8A2BE2"></a>
-<a href="https://arxiv.org/pdf/2503.05592" target="_blank"><img src=https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv></a>
+## Overview
 
-</div>
+**AgentGL** is an RL-driven framework for **Agentic Graph Learning (AGL)**. It enables LLM agents to solve graph learning tasks by dynamically exploring text-attributed graphs, retrieving topology-aware evidence, and reasoning over the collected information.
 
+Unlike static GraphLLM or GraphRAG pipelines, AgentGL performs **interleaved graph search and reasoning**. It provides the agent with graph-native search tools for local neighborhood exploration, multi-hop traversal, global structural probing, and dense semantic retrieval. This allows the model to adaptively acquire task-relevant evidence from both graph topology and node text.
 
-<!-- <div align="center">
-    <span style="display:inline-block; margin-right: 10px;">
-        <a href="https://paperswithcode.com/sota/mathematical-reasoning-on-aime24?p=search-o1-agentic-search-enhanced-large">
-            <img src="https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/search-o1-agentic-search-enhanced-large/mathematical-reasoning-on-aime24" alt="AIME24 Badge">
-        </a>
-    </span>
-    <span style="display:inline-block; margin-right: 10px;">
-        <a href="https://paperswithcode.com/sota/mathematical-reasoning-on-amc23?p=search-o1-agentic-search-enhanced-large">
-            <img src="https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/search-o1-agentic-search-enhanced-large/mathematical-reasoning-on-amc23" alt="AMC23 Badge">
-        </a>
-    </span>
-  <span style="display:inline-block; margin-right: 10px;">
-        <a href="https://paperswithcode.com/sota/on-gpqa?p=search-o1-agentic-search-enhanced-large">
-            <img src="https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/search-o1-agentic-search-enhanced-large/on-gpqa" alt="GPQA Badge">
-        </a>
-    </span>
-</div> -->
+AgentGL is trained with a two-stage reinforcement learning pipeline: first, it bootstraps graph-native tool-use behaviors; then, it mitigates search overuse by encouraging the agent to reason more carefully before issuing additional searches. A graph-conditioned curriculum further stabilizes training by organizing examples according to structural and semantic difficulty.
 
+Experiments across diverse text-attributed graph benchmarks show that AgentGL substantially improves over strong GNN, GraphLLM, GraphRAG, and agentic-search baselines on node classification and link prediction.
 
+## Repository Layout
 
-<h5 align="center"> If you like our project, please give us a star ⭐ on GitHub for the latest update.</h5>
+```text
+AgentGL/
+  config/agentgl.env              # default, portable runtime configuration
+  data_construction/              # utilities for rebuilding prepared JSONL data
+  data/                           # empty output directory for generated JSONL files
+  evaluation/                     # vLLM graph-search evaluation scripts
+  local_launchers/                # optional local launcher examples
+  OpenRLHF-RAG/                   # OpenRLHF fork used by AgentGL training
+  prompt_templates/               # NC and LP prompt templates
+  scripts/                        # exactly eight release training scripts
+  train/                          # reward servers and runtime services
+```
 
+The graph artifact directory is separate from generated JSONL files. Set `AGENTGL_NODE_DATA_ROOT` to a directory named `node_data` containing per-dataset folders such as `ogbn-arxiv/`, `ogbn-products/`, `amazon-photo/`, etc. Each folder is expected to contain graph files such as `node_texts.json`, `category.json`, `first_hop_indices.json`, and cached embeddings if available.
 
-# ✨ News
-+ [22 May 2025] ⚡️⚡️ [**R1-Searcher++**](https://github.com/RUCAIBox/R1-Searcher-plus):We propose **R1-Searcher++**,  a framework for training LLMs to adaptively use internal and external knowledge. It uses a two-stage strategy: an initial SFT Cold-start phase for basic format learning, and an RL phase for Dynamic
-Knowledge Acquisition. In the RL phase, we introduce a reward mechanism for the utilization of internal knowledge and integrate a memorization mechanism to continuously assimilate the retrieved information, thereby enriching the model's internal knowledge.
-The paper can be found here: [**arxiv.org/abs/2505.17005**](https://arxiv.org/abs/2505.17005)
-+ [22 May 2025] ⚡️⚡️ [**SimpleDeepSearcher-paper**](https://github.com/RUCAIBox/SimpleDeepSearcher):We release the paper of the SimpleDeepSearcher, which also explores the impact of using a distilled model as the backbone for continued reinforcement learning training, as well as the effects of incorporating long cot math reasoning data during the training process. Additionally, the paper includes comprehensive experiments. The paper can be found here: [**arxiv.org/abs/2505.16834**](https://arxiv.org/abs/2505.16834)
-+ [16 Apr 2025] ⚡️⚡️ [**SimpleDeepSearcher**](https://github.com/RUCAIBox/SimpleDeepSearcher):We propose **SimpleDeepSearcher**, a framework designed to stimulate autonomous retrieval during complex reasoning via knowledge distillation and self-distillation. The goal is to achieve efficient and effective training using only a small amount of data.
-+ [8 Mar 2025] ⚡️⚡️ [**R1-Searcher**](https://arxiv.org/abs/2503.05592)We propose **R1-searcher**, utilizing a *two-stage outcome-supervision reinforcement learning* approach to enable the model to learn to invoke web search during the reasoning process: first allowing the model to learn how to invoke web search, and then teaching it how to effectively use that search engine. This method does not require any instruction fine-tuning for cold start, and at the same time, it is compatible with existing Base LLMs or Chat LLMs.
+## Installation
 
-# 💡 Overview
-
-Large reasoning models (LRMs), such as OpnAI-o1 and Deepseek-R1, have demonstrated the significant impact of reinforcement learning in enhancing the long-step reasoning capabilities of models, thereby greatly improving their reasoning performance. Despite these advantages, when faced with knowledge-intensive problems, especially multi-hop questions and time-sensitive issues, these models may lack the necessary knowledge. Therefore, it is great important to enable LLMs to invoke web search and obtain external information during the reasoning process.
-
-We propose **R1-searcher**, utilizing a *two-stage outcome-supervision reinforcement learning* approach to enable the model to learn to invoke web search during the reasoning process: first allowing the model to learn how to invoke web search, and then teaching it how to effectively use that search engine. This method does not require any instruction fine-tuning for cold start, and at the same time, it is compatible with existing Base LLMs or Chat LLMs. We open-source the training code, inference code, model checkpoints, and the detailed technical report.
-
-- Arxiv: [arxiv.org/abs/2503.05592](https://arxiv.org/abs/2503.05592)
-- Model:
-    - Qwen-2.5-7B-Base-RAG-RL: https://huggingface.co/XXsongLALA/Qwen-2.5-7B-base-RAG-RL
-    - Llama-3.1-8B-Instruct-RAG-RL: https://huggingface.co/XXsongLALA/Llama-3.1-8B-instruct-RAG-RL
-- Train-data:  https://huggingface.co/datasets/XXsongLALA/RAG-RL-Hotpotqa-with-2wiki
-
-![benchmark_picture](https://github.com/RUCAIBox/R1-Searcher/blob/main/assets/benchmarks_visible.jpg)
-
-# ✨ Key Insights
-- By relying solely on outcome-supervised reinforcement learning, we can activate the model's intrinsic search capabilities using only the query-answer pair, regardless of whether we are dealing with Base LLMs or Chat LLMs.
-- Recent reinforcement learning algorithms, such as GRPO and Reinforce++ both can effectively activate the internal search capabilities of the LLMs.
-- There is no requirement for complex prompt engineering or process supervision during training.
-- The capability of the Base LLMs largely influences whether the model can directly start training from Zero.
-- LongCoT reasoning after RL is an more effectively and efficient test time scaling method than existing tree-search based methods, e.g., Monte Carlo Tree Search.
-- By using a local retrieval for RL training, the model can generalize well to other datasets and online searches scenarios.
-- The final 7B parameters LLMs achieve the significant performance improvements compared to existing complex method or even close-sourced LLMs (e.g., GPT-4o-mini).
-
-# ✨ Method
-## Overall
-
-We employ a Two-Stage Reward Guided RL Training approach:
-
-Stage 1: Learn to invoke search with only format-reward.
-
-Stage 2: Learn to solve questions with invoking search with format-reward and answer-reward.
-
-
-## Algorithm
-We use only outcome-supervised reinforcement learning for training, so we need to consider two main aspects: (1) the reinforcement learning algorithm, and (2) the design of the reward.
-
-- RL Algorithm: We use Reinforce++ as our RL algorithm. For each questions, we average the rewards of *n* samples, which stabilizes the training process. For the solution format, we utilize `<think>...</think>` tag for thinking, xxx for searching, and `<answer>...</answer>` for answering, `<begin_of_search>...<end_of_search>` for invoking search tool and `<begin_of_documents>...<end_of_documents>` for returned retrieval documents.
-- Reward Design：In Stage-1, we use the retrieve-reward: if the model performs retrieval and the solution meets the format requirements, 0.5 points are added to the answer reward. In Stage 2, the retrieval requirement is removed and we utilize the F1-based answer-reward. A penalty of 2 points is subtracted from the answer reward if the solution does not meet the format requirements. Detailed implementation, including hyperparameters can be found in our code.
-
-## Data
-
-We choose a portion of the training sets from HotpotQA and 2WikiMultiHopQA as our training data. We use Qwen-2.5-7B-Instruct to perform rollouts on the training dataset.
-
-Based on the number of rollouts required to answer a question correctly, we classify the data into three categories: easy (<10 rollouts), medium (10 < and < 20 rollouts), and difficult (>20 rollouts). These categories are then mixed in a specific ratio to form our training data. All of our training data can be found here:  https://huggingface.co/datasets/XXsongLALA/RAG-RL-Hotpotqa-with-2wiki.
-
-
-
-
-# 📄 Evaluation
-Following ReARTeR(https://arxiv.org/pdf/2501.07861), we select four representative benchmarks: HotpotQA, 2WikiMultiHopQA, Musique, and Bamboogle.
-
-HotpotQA and 2WikiMultiHopQA are considered in-domain as we use their training-set, while Musique and Bamboogle are classified as out-of-domain, allowing us to assess the generalization capabilities of our model. We randomly sample 500 examples from the development sets of HotpotQA, 2WikiMultiHopQA,  and Musique to serve as our test sets. For Bamboogle, we use all of the test set (125 samples) as our test set..
-
-Wikipedia passages serve as the retrieval corpus for all datasets, specifically employing the [Wikipedia corpus released by KILT](https://github.com/facebookresearch/KILT) in August 2019. Additionally, due to the recency of the knowledge contained in Bamboogle, we incorporate online web search testing to conduct further evaluations, thereby examining the alignment of our model with online search capabilities.
-
-For the evaluation metrics, we use the ACC_R (Cover-Exect-Match) and ACC_L (LLM-as-Judge).
-![benchmark](https://github.com/RUCAIBox/R1-Searcher/blob/main/assets/benchmarks.jpg)
-As we can see, when using the same LLaMA-3.1-8B-Instruct base model, our method has achieved significant improvements compared to existing methods, even surpassing closed-source models such as GPT-4o-mini. Furthermore, when switching to the more powerful base model, Qwen-2.5-7B-Base, we directly conduct reinforcement learning from scratch. Eventually, we can achieve better results and attain the best performance on all in-domain and out-of-domain datasets, demonstrating the exceptional generalization capabilities of our model.
-
-For Bamboogle, we additionally utilize Google for online searches. As we can see, compared to relying solely on a local knowledge base, the incorporation of online search yields superior results, indicating that it is feasible to seamlessly integrate online search capabilities into our model.
-![bamboogle](https://github.com/RUCAIBox/R1-Searcher/blob/main/assets/bamboogle_online.jpg)
-
-
-
-# 🏃 Quick Start
-## Environment Setup
-> Note: the environment is same to [STILL-3](https://github.com/RUCAIBox/Slow_Thinking_with_LLMs/tree/main/STILL-3-TOOL) (Great work!).
+Use Python 3.10+ with CUDA-capable PyTorch. The exact CUDA, PyTorch, vLLM, and FlashAttention versions should match your cluster image.
 
 ```bash
-conda create --name r1-searcher python=3.10.16
-conda activate r1-searcher
-pip install vllm==0.6.5
-pip install packaging
-pip install ninja
-pip install flash-attn --no-build-isolation
-pip install deepspeed
-pip install accelerate
-pip install datasets
+git clone <repo-url> AgentGL
+cd AgentGL
+
+conda create -n agentgl python=3.10
+conda activate agentgl
+
+pip install -r requirements.txt
 ```
-## Data Preparation
+
+Alternatively, you can also set up the environment following the [R1-Searcher project](https://github.com/RUCAIBox/R1-Searcher) and then adjust some dependencies.
+
+## Configuration
+
+The release scripts read `config/agentgl.env` and allow every path to be overridden by environment variables.
+
+Common variables:
 
 ```bash
-cd R1-Searcher
-
-## Process wiki only abs
-wget -nv --no-check-certificate https://rocketqa.bj.bcebos.com/corpus/nq.tar.gz
-tar -zxf nq.tar.gz
-rm -rf nq.tar.gz # We only use the title and abs.
-
-## Process wiki full texts
-wget http://dl.fbaipublicfiles.com/KILT/kilt_knowledgesource.json
-cd R1-Searcher
-python wiki_corpus_index_bulid/split_kilt_to_100.py
-
-## Index the tsv file. We recommend splitting the original TSV file into n parts for embedding, otherwise the process will be very slow.
-python wiki_corpus_index_bulid/build_corpus_embedding.py --file_path the_tsv_file_path --save_path the_pickle_path --gpu_id 0
-python wiki_corpus_index_bulid/build_corpus_idnex.py
-
+export AGENTGL_NODE_DATA_ROOT=/path/to/node_data
+export AGENTGL_GRAPH_ENCODER_PATH=/path/to/all-roberta-large-v1
+export AGENTGL_OUTPUT_ROOT=$PWD/outputs
+export AGENTGL_RAY_ADDRESS=http://127.0.0.1:8267
+export AGENTGL_REWARD_PORT=1278
+export AGENTGL_GRAPH_ENCODER_REMOTE_URL=http://127.0.0.1:9100/encode
 ```
-## Training
+
+Optional base model overrides:
+
 ```bash
-cd R1-Searcher
-
-## Ray start
-bash scripts/ray_start.sh
-
-## Mount Wikipedia
-python train/wiki_corpus_load.py hotpotqa 5004 &
-
-## Convert jsonl to hf dataset
-python train/jsonl2hf_dataset.py --input data/training_set/stage_2.jsonl --output data/training_set/stage_2
-
-## Start Reward Server 
-python train/reward_server_qwen_zero.py --data_path data/training_set/stage_2 --reward_pretrain the_model_path --log_file results/samples/qwen.jsonl --port 1278
-
-## Training
-bash scripts/qwen_reinforce_plus_train.sh | tee results/logs/qwen_reinforce_plus_train.txt
+export AGENTGL_BASE_MODEL_NC_GRPO_STAGE1=Qwen/Qwen2.5-3B-Instruct
+export AGENTGL_BASE_MODEL_NC_REINFORCEPP_STAGE1=Qwen/Qwen2.5-7B-Instruct
+export AGENTGL_BASE_MODEL_LP_GRPO_STAGE1=Qwen/Qwen2.5-3B-Instruct
+export AGENTGL_BASE_MODEL_LP_REINFORCEPP_STAGE1=Qwen/Qwen2.5-3B-Instruct
 ```
+
+Stage 2 scripts default to the matching Stage 1 checkpoint under `${AGENTGL_OUTPUT_ROOT}/ckpts/`. To resume from a different checkpoint, set the matching variable, for example:
+
+```bash
+export AGENTGL_NC_GRPO_STAGE2_MODEL=/path/to/agentgl_nc_grpo_stage1
+```
+
+W&B is disabled unless you provide a key:
+
+```bash
+export AGENTGL_WANDB_API_KEY=<your-key>
+```
+
+
+## Data Construction
+
+The repository keeps `data/` empty. Generate JSONL files locally before training or evaluation.
+
+Download the original graph artifacts and edge-index files from the [Google Drive data folder](https://drive.google.com/drive/folders/1w_Jh4DMyBWEj186yEsrXZ0532fVP8Jpz).
+
+After downloading, place the extracted data folders in the project root. The node artifact folder should be named `node_data`, and the edge-index folder should be named `edge_indices`:
+
+Then set the paths used by the data construction scripts. Replace the placeholder paths with your own local paths:
+
+```bash
+export AGENTGL_NODE_DATA_ROOT="$PWD/node_data"
+export AGENTGL_EDGE_DATA_ROOT="$PWD/edge_indices"
+export AGENTGL_GRAPH_ENCODER_PATH=/path/to/all-roberta-large-v1
+export AGENTGL_DATA_SEED=<YOUR_SEED>
+```
+
+### NC Data
+
+NC data is generated by `data_construction/generate_datasets_from_splits.py`. It reads `node_texts.json`, `category.json`, `first_hop_indices.json`, and `splits.json` from each dataset folder. Stage 1 samples train nodes by difficulty; Stage 2 samples medium/hard train nodes while excluding Stage 1 and evaluation nodes.
+
+```bash
+# Sampled NC evaluation set.
+python data_construction/generate_datasets_from_splits.py \
+  --node-data-root "$AGENTGL_NODE_DATA_ROOT" \
+  --datasets ogbn-arxiv,ogbn-products,amazon-computers,amazon-photo,arxiv_2023,pubmed,reddit \
+  --mode eval \
+  --seed "$AGENTGL_DATA_SEED" \
+  --eval-split test \
+  --eval-size 1000 \
+  --output-dir data/eval_set
+
+# Full NC evaluation set. The script uses all available nodes if the requested
+# size is larger than the split.
+python data_construction/generate_datasets_from_splits.py \
+  --node-data-root "$AGENTGL_NODE_DATA_ROOT" \
+  --datasets ogbn-arxiv,ogbn-products,amazon-computers,amazon-photo,arxiv_2023,pubmed,reddit \
+  --mode eval \
+  --seed "$AGENTGL_DATA_SEED" \
+  --eval-split test \
+  --eval-size 100000000 \
+  --output-dir data/eval_set_all
+
+# Raw NC training stages.
+python data_construction/generate_datasets_from_splits.py \
+  --node-data-root "$AGENTGL_NODE_DATA_ROOT" \
+  --datasets ogbn-arxiv,ogbn-products \
+  --mode stage1 \
+  --seed "$AGENTGL_DATA_SEED" \
+  --stage1-easy 1000 \
+  --stage1-medium 500 \
+  --stage1-hard 500 \
+  --output-dir data/training_set
+
+python data_construction/generate_datasets_from_splits.py \
+  --node-data-root "$AGENTGL_NODE_DATA_ROOT" \
+  --datasets ogbn-arxiv,ogbn-products \
+  --mode stage2 \
+  --seed "$AGENTGL_DATA_SEED" \
+  --stage1-files data/training_set/ogbn-arxiv_stage1_2000.jsonl,data/training_set/ogbn-products_stage1_2000.jsonl \
+  --eval-dir data/eval_set \
+  --stage2-medium 500 \
+  --stage2-hard 500 \
+  --output-dir data/training_set
+```
+
+The NC training scripts read the generated files in `data/training_set/` by default. If you want a different stage distribution, sample from `data/training_set/` with your own policy and override the matching `AGENTGL_NC_*_DATA_PATH` variable.
+
+### LP Data
+
+LP data is generated by `data_construction/build_lp_datasets.py`. It reads `node_texts.json`, `first_hop_indices.json`, `second_hop_indices.json`, optional `pagerank.npy` and `node_emb.npy` from `node_data`, and original edge-index files from `AGENTGL_EDGE_DATA_ROOT`.
+
+```bash
+# Raw LP train/test pairs and retrieval metadata.
+python data_construction/build_lp_datasets.py \
+  --node-data-root "$AGENTGL_NODE_DATA_ROOT" \
+  --edge-dir "$AGENTGL_EDGE_DATA_ROOT" \
+  --output-dir data/link_prediction \
+  --model-path "$AGENTGL_GRAPH_ENCODER_PATH" \
+  --device cuda:0 \
+  --seed "$AGENTGL_DATA_SEED" \
+  --train-datasets ogbn-arxiv,ogbn-products \
+  --test-datasets ogbn-arxiv,ogbn-products,amazon-computers,amazon-photo,arxiv_2023,pubmed,reddit \
+  --train-num-positive 1500 \
+  --train-num-negative 1500 \
+  --test-num-positive 500 \
+  --test-num-negative 500 \
+  --similar-top-k 10
+
+# LP stage files used by scripts/train_lp_*.sh.
+python data_construction/build_lp_stage_datasets.py \
+  --datasets ogbn-arxiv,ogbn-products \
+  --input-root data/link_prediction \
+  --output-dir data/link_prediction_stage \
+  --stage1-difficulties easy,medium \
+  --stage2-difficulties medium,hard \
+  --force
+```
+
+If `node_emb.npy` is missing for a dataset, `build_lp_datasets.py` encodes the needed node texts with `AGENTGL_GRAPH_ENCODER_PATH`. You can precompute and cache those embeddings with `data_construction/precompute_graph_embeddings.py` when building data repeatedly.
+
+## Services
+
+Start the embedding service:
+
+```bash
+python train/embedding_server.py \
+  --model_path "$AGENTGL_GRAPH_ENCODER_PATH" \
+  --device cuda:7 \
+  --port 9100
+```
+
+Start the NC reward server:
+
+```bash
+# Stage 1
+python train/reward_server_qwen_zero.py \
+  --data_path "$AGENTGL_NODE_DATA_ROOT/ogbn-arxiv,$AGENTGL_NODE_DATA_ROOT/ogbn-products" \
+  --port 1278 \
+  --log_file logs/reward_nc_stage1.jsonl
+
+# Stage 2
+python train/reward_server_qwen_stage2.py \
+  --data_path "$AGENTGL_NODE_DATA_ROOT/ogbn-arxiv,$AGENTGL_NODE_DATA_ROOT/ogbn-products" \
+  --port 1278 \
+  --log_file logs/reward_nc_stage2.jsonl
+```
+
+Start the LP reward server:
+
+```bash
+# Stage 1
+python train/reward_server_lp.py \
+  --pair_data "data/link_prediction/ogbn-arxiv/train.jsonl,data/link_prediction/ogbn-products/train.jsonl" \
+  --port 1278 \
+  --log_file logs/reward_lp_stage1.jsonl
+
+# Stage 2
+python train/reward_server_lp_stage2.py \
+  --pair_data "data/link_prediction/ogbn-arxiv/train.jsonl,data/link_prediction/ogbn-products/train.jsonl" \
+  --port 1278 \
+  --log_file logs/reward_lp_stage2.jsonl
+```
+
+Start Ray before submitting a training job:
+
+```bash
+ray start --head --num-gpus 8 --port 8266 --dashboard-port 8267
+```
+
+## Training Scripts
+
+There are exactly eight release training scripts:
+
+| Task | Algorithm | Stage | Script |
+| --- | --- | --- | --- |
+| NC | GRPO | Stage 1 | `scripts/train_nc_grpo_stage1.sh` |
+| NC | GRPO | Stage 2 | `scripts/train_nc_grpo_stage2.sh` |
+| NC | REINFORCE++ | Stage 1 | `scripts/train_nc_reinforcepp_stage1.sh` |
+| NC | REINFORCE++ | Stage 2 | `scripts/train_nc_reinforcepp_stage2.sh` |
+| LP | GRPO | Stage 1 | `scripts/train_lp_grpo_stage1.sh` |
+| LP | GRPO | Stage 2 | `scripts/train_lp_grpo_stage2.sh` |
+| LP | REINFORCE++ | Stage 1 | `scripts/train_lp_reinforcepp_stage1.sh` |
+| LP | REINFORCE++ | Stage 2 | `scripts/train_lp_reinforcepp_stage2.sh` |
+
+Example NC GRPO run:
+
+```bash
+bash scripts/train_nc_grpo_stage1.sh
+bash scripts/train_nc_grpo_stage2.sh
+```
+
+Example LP REINFORCE++ run:
+
+```bash
+bash scripts/train_lp_reinforcepp_stage1.sh
+bash scripts/train_lp_reinforcepp_stage2.sh
+```
+
+All scripts use generated JSONL files under `data/`. They do not regenerate training data.
+
 ## Evaluation
 
+NC evaluation across multiple datasets:
+
 ```bash
-cd R1-Searcher
-
-## Local Search
-## HotpotQA
-python train/wiki_corpus_load.py hotpotqa 5004 &
-python evaluation/eval_search_loacl.py --gpu_id 0 --temp 0.0 --port 5004 --prompt_type v0 --src_file  data/eval_set/hotpotqa_500.jsonl --model_path the_path_to_model
-## 2Wiki, Musique, Bamboogle
-python train/wiki_corpus_load.py kilt 5005 &
-python evaluation/eval_search_loacl.py --gpu_id 0 --temp 0.0 --port 5005 --prompt_type v0 --src_file data/eval_set/bamboogle_500.jsonl --model_path the_path_to_model
-
-## Online Search
-## Bamboogle
-python evaluation/eval_search_online.py --gpu_id 0 --temp 0.0 --port 5004 --prompt_type v0 --src_file data/eval_set/bamboogle_500.jsonl --model_path the_path_to_model
-
-## Calculate Metric
-## Exact Match, Cover Exact Match, F1 Score
-python evaluation/metric_calc_rule.py the_path_to_results
-
-## LLM-as-Judge. Remember replace the input file to your own results.
-python evaluation/metric_calc_gpt_as_judge.py
+python evaluation/run_eval_suite.py \
+  --datasets ogbn-arxiv,ogbn-products,amazon-computers,amazon-photo,arxiv_2023,pubmed,reddit \
+  --eval_dir data/eval_set \
+  --graph_data_root "$AGENTGL_NODE_DATA_ROOT" \
+  --output_dir data/eval_results \
+  --output_suffix _agentgl_nc_grpo_stage2.jsonl \
+  --model "$AGENTGL_OUTPUT_ROOT/ckpts/agentgl_nc_grpo_stage2" \
+  --tokenizer "$AGENTGL_OUTPUT_ROOT/ckpts/agentgl_nc_grpo_stage2" \
+  --graph_encoder_path "$AGENTGL_GRAPH_ENCODER_PATH" \
+  --head 1000 \
+  --batch-size 128 \
+  --tensor-parallel-size 2
 ```
 
-# 📄 Citation
-Please kindly cite our report if they are helpful for your research.
+LP evaluation on one dataset:
 
+```bash
+python evaluation/eval_gs.py \
+  --graph-task link \
+  --model "$AGENTGL_OUTPUT_ROOT/ckpts/agentgl_lp_grpo_stage2" \
+  --tokenizer "$AGENTGL_OUTPUT_ROOT/ckpts/agentgl_lp_grpo_stage2" \
+  --graph-data-dir "data/link_prediction/ogbn-arxiv/train.jsonl,data/link_prediction/ogbn-arxiv/test.jsonl" \
+  --lp-node-data-root "$AGENTGL_NODE_DATA_ROOT" \
+  --eval-file data/link_prediction/ogbn-arxiv/test.jsonl \
+  --output-file data/eval_results/ogbn-arxiv_agentgl_lp_grpo_stage2.jsonl \
+  --graph-encoder-path "$AGENTGL_GRAPH_ENCODER_PATH" \
+  --tensor-parallel-size 2
 ```
-@article{R1-searcher,
-  title={R1-Searcher: Incentivizing the Search Capability in LLMs via Reinforcement Learning},
-  author={Huatong Song, Jinhao Jiang, Yingqian Min, Jie Chen, Zhipeng Chen, Wayne Xin Zhao, Ji-Rong Wen, Yang Lu, Xu Miu},
-  url={https://github.com/RUCAIBox/R1-searcher},
-  year={2025}
+
+Compute exact-match accuracy from an evaluation output:
+
+```bash
+python evaluation/metric_acc.py --input data/eval_results/ogbn-arxiv_agentgl_lp_grpo_stage2.jsonl
+```
+
+## Local Convenience Launchers
+
+The `local_launchers/` folder contains optional example wrappers that source `local_launchers/agentgl_local.env`, start the embedding server, reward server, and Ray, then call the matching release training script.
+
+Edit the placeholder paths in `local_launchers/agentgl_local.env`, then run one of:
+
+```bash
+bash local_launchers/run_nc_grpo_stage1.sh
+bash local_launchers/run_nc_grpo_stage2.sh
+bash local_launchers/run_lp_grpo_stage1.sh
+bash local_launchers/run_lp_grpo_stage2.sh
+```
+
+## Notes
+
+- The training scripts assume the reward server and embedding server are reachable from the Ray workers.
+- `AGENTGL_NODE_DATA_ROOT` must match the datasets used by the prepared JSONL files.
+- Stage 2 scripts are intended to run after the matching Stage 1 script unless you override the Stage 2 model path.
+- Historical evaluation outputs, caches, and logs are ignored by git and can be regenerated.
+
+## Citation
+
+If you find AgentGL useful, please cite our paper:
+
+```bibtex
+@article{sun2026agentgl,
+  title={Agentgl: Towards agentic graph learning with llms via reinforcement learning},
+  author={Sun, Yuanfu and Li, Kang and Fan, Dongzhe and Liu, Jiajin and Tan, Qiaoyu},
+  journal={arXiv preprint arXiv:2604.05846},
+  year={2026}
 }
 ```
 
-# 📄 License
+## Acknowledgements
 
-This project is released under the [MIT License](LICENSE).
-
-# 📞 Contact
-
-For any questions or feedback, please reach out to us at [songhuatong123@ruc.edu.cn](songhuatong123@ruc.edu.cn).
+AgentGL builds on ideas and code structure from [R1-Searcher](https://github.com/RUCAIBox/R1-Searcher). We sincerely thank the R1-Searcher authors for releasing their codebase, which provided valuable foundations for this project.

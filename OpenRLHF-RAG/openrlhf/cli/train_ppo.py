@@ -401,6 +401,68 @@ if __name__ == "__main__":
         "--apply_chat_template", action="store_true", default=False, help="Use HF tokenizer chat template"
     )
 
+    # Graph retrieval settings (shared with Ray runner)
+    parser.add_argument(
+        "--graph_data_dir",
+        type=str,
+        default=None,
+        help="Path to the processed graph data directory (node_texts.json, etc.)",
+    )
+    parser.add_argument(
+        "--graph_encoder_path",
+        type=str,
+        default=None,
+        help="SentenceTransformer model path used when graph embeddings need to be built",
+    )
+    parser.add_argument(
+        "--graph_max_searches",
+        type=int,
+        default=5,
+        help="Maximum number of graph searches described in the prompt instructions",
+    )
+    parser.add_argument(
+        "--graph_topk",
+        type=int,
+        default=5,
+        help="Default number of neighbours returned per graph retrieval",
+    )
+    parser.add_argument(
+        "--graph_topk_similar",
+        type=int,
+        default=None,
+        help="Override number of neighbours returned for the 'similar' pool (defaults to --graph_topk)",
+    )
+    parser.add_argument(
+        "--graph_topk_one_hop",
+        type=int,
+        default=None,
+        help="Override number of neighbours returned for the '1-hop' pool (defaults to --graph_topk)",
+    )
+    parser.add_argument(
+        "--graph_topk_two_hop",
+        type=int,
+        default=None,
+        help="Override number of neighbours returned for the '2-hop' pool (defaults to --graph_topk)",
+    )
+    parser.add_argument(
+        "--graph_topk_pagerank",
+        type=int,
+        default=None,
+        help="Override number of neighbours returned for the 'pagerank' pool (defaults to --graph_topk)",
+    )
+    parser.add_argument(
+        "--graph_fusion_alpha",
+        type=float,
+        default=0.5,
+        help="Interpolation weight between anchor embedding and query embedding for hop searches",
+    )
+    parser.add_argument(
+        "--graph_reflect_after_docs",
+        action="store_true",
+        default=False,
+        help="After each retrieval block, append a reflection cue encouraging the model to reconsider before issuing another search",
+    )
+
     # wandb parameters
     parser.add_argument("--use_wandb", type=str, default=None)
     parser.add_argument("--wandb_org", type=str, default=None)

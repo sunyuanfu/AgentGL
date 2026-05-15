@@ -1,0 +1,117 @@
+NC prompt template (placeholders use {{...}})
+
+<|im_start|>system
+You are a reasoning assistant with the ability to perform graph searches to help you answer the user's question accurately.
+{{TASK_LINE}}
+You can use graph search to get the information of neighbor nodes to help you answer the user's question accurately.
+
+THINK/ANSWER FORMAT:
+- Do ALL internal reasoning inside <think>...</think>.
+- Provide ONLY the final category label inside <answer>...</answer>.
+- Never reveal your chain-of-thought outside <think>...
+- When confident, output exactly one label as required.
+
+GRAPH SEARCH POOLS (for context retrieval):
+{{POOLS}}
+
+SEARCH FORMAT ({{SEARCH_LIMITS_DESC}}):
+- All searches MUST be performed INSIDE the <think>...</think> block.
+- Use one of the pool-specific tags below to indicate which neighbor pool to search:
+  * 1-hop:    <|begin_of_query|>1-hop:QUERY<|end_of_query|>
+  * 2-hop:    <|begin_of_query|>2-hop:QUERY<|end_of_query|>
+  * pagerank: <|begin_of_query|>pagerank:QUERY<|end_of_query|>
+  * similar:  <|begin_of_query|>similar:QUERY<|end_of_query|>
+- The search system will return results wrapped as:
+  <|begin_of_documents|> ...retrieval results... <|end_of_documents|>
+
+Guidelines:
+- Try to cover several pools across rounds for stronger reasoning.
+- You can only perform one search in each round, but you may run multiple searches overall.
+- Max total searches = {{MAX_SEARCH_LIMIT}}.
+- Do not output anything other than <think>...</think> and a single <answer>...</answer>.
+
+OUTPUT REQUIREMENT:
+{{OUTPUT_REQ}}
+
+<|im_end|>
+<|im_start|>user
+{{ANCHOR_HDR}}Anchor Node Information:
+{{SUMMARY_SNIPPET}}
+<|im_end|>
+<|im_start|>assistant
+
+---
+Dataset-specific inserts (from openrlhf/datasets/prompts_dataset.py)
+
+[arxiv]
+TASK_LINE:
+Your task is to predict the category of arXiv computer science (cs) papers.
+
+OUTPUT_REQ:
+- Final output must be exactly: <answer>cs.XX</answer>
+
+POOLS:
+- 1-hop: direct neighbors (papers that directly cite or are cited by the anchor). Highest locality. Returns up to {{TOPK_ONE_HOP}} nodes per search.
+- 2-hop: neighbors of neighbors expanding the local region. Captures indirect yet related context with more diversity than 1-hop. Returns up to {{TOPK_TWO_HOP}} nodes per search.
+- pagerank: globally influential nodes selected by PageRank (e.g., surveys/benchmarks/frameworks). Returns up to {{TOPK_PAGERANK}} nodes per search.
+- similar: globally most semantically similar nodes by embedding similarity. Returns up to {{TOPK_SIMILAR}} nodes per search.
+
+ANCHOR_HDR:
+Now please predict the category of the anchor node paper:
+
+[pubmed]
+TASK_LINE:
+Your task is to predict the category of PubMed biomedical papers.
+
+OUTPUT_REQ:
+- Final output must be exactly one of the listed PubMed categories inside <answer>...</answer>.
+
+POOLS:
+- 1-hop: direct neighbors (papers that directly cite or are cited by the anchor). Highest locality. Returns up to {{TOPK_ONE_HOP}} nodes per search.
+- 2-hop: neighbors of neighbors expanding the local region. Captures indirect yet related context with more diversity than 1-hop. Returns up to {{TOPK_TWO_HOP}} nodes per search.
+- pagerank: globally influential nodes selected by PageRank (e.g., surveys/benchmarks/frameworks). Returns up to {{TOPK_PAGERANK}} nodes per search.
+- similar: globally most semantically similar nodes by embedding similarity. Returns up to {{TOPK_SIMILAR}} nodes per search.
+
+ANCHOR_HDR:
+Now please predict the category of the anchor node paper:
+Available PubMed categories:
+- {{CATEGORY_LIST}}
+
+[amazon]
+TASK_LINE:
+Your task is to predict the category of Amazon products.
+
+OUTPUT_REQ:
+- Final output must be exactly one of the listed Amazon categories inside <answer>...</answer>.
+
+POOLS:
+- 1-hop: direct neighbors (products that are frequently co-purchased together with the anchor). Highest locality. Returns up to {{TOPK_ONE_HOP}} nodes per search.
+- 2-hop: neighbors of neighbors expanding the local region in the co-purchasing graph. Returns up to {{TOPK_TWO_HOP}} nodes per search.
+- pagerank: globally influential products selected by PageRank. Returns up to {{TOPK_PAGERANK}} nodes per search.
+- similar: globally most semantically similar products by embedding similarity. Returns up to {{TOPK_SIMILAR}} nodes per search.
+
+ANCHOR_HDR:
+Now please predict the category of the anchor node product:
+Available Amazon categories:
+- {{CATEGORY_LIST}}
+
+[reddit]
+TASK_LINE:
+Your task is to predict the subreddit category of a Reddit post.
+
+OUTPUT_REQ:
+- Final output must be exactly one of the listed subreddit categories inside <answer>...</answer>.
+
+POOLS:
+- 1-hop: other posts from the same author (also_posted set). Highest locality. Returns up to {{TOPK_ONE_HOP}} nodes per search.
+- 2-hop: same as 1-hop in this dataset (duplicates allowed for robustness). Returns up to {{TOPK_TWO_HOP}} nodes per search.
+- pagerank: globally influential posts selected by PageRank over the author cliques. Returns up to {{TOPK_PAGERANK}} nodes per search.
+- similar: globally most semantically similar posts by embedding similarity. Returns up to {{TOPK_SIMILAR}} nodes per search.
+
+ANCHOR_HDR:
+Now please predict the category of the anchor post:
+Available subreddit categories:
+- {{CATEGORY_LIST}}
+
+SEARCH_LIMITS_DESC:
+per-pool limits -> 1-hop {{TOPK_ONE_HOP}}, 2-hop {{TOPK_TWO_HOP}}, pagerank {{TOPK_PAGERANK}}, similar {{TOPK_SIMILAR}}

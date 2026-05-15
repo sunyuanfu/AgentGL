@@ -51,14 +51,14 @@ def cover_exact_match_score_1(prediction, ground_truth):
     pre_list = normalize_answer(bool_mapping(prediction)).split(" ")
     ground_list = normalize_answer(bool_mapping(ground_truth)).split(" ")
 
-    # 不考虑顺序和连续
+    # Ignore order and contiguity.
     return all(ground in pre_list for ground in ground_list)
 
 
 def normalize_text(text):
-    text = re.sub("[,.:\"'\[\]\-=\+\\|!@#$%^&*();<>?/！￥…（）—\{\}：”“《》？]", " ", text.lower())
-    text = re.sub("import\s[a-zA-Z\.]+(\sas\s[a-zA-Z\.]+)\n", " ", text)
-    text = re.sub("\s+", " ", text)
+    text = re.sub(r"[,.:\"'\[\]\-=\+\\|!@#$%^&*();<>?/\uFF01\uFFE5\u2026\uFF08\uFF09\u2014\{\}\uFF1A\u201D\u201C\u300A\u300B\uFF1F]", " ", text.lower())
+    text = re.sub(r"import\s[a-zA-Z\.]+(\sas\s[a-zA-Z\.]+)\n", " ", text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 def strip_sequence(text, pad_token, eos_token):
@@ -77,9 +77,9 @@ def extract_answer_math(s):
     return s.split("<answer>")[-1].split("</answer>")[0].strip()
 
 def normalize_text(text):
-    text = re.sub("[,.:\"'\[\]\-=\+\\|!@#$%^&*();<>?/！￥…（）—\{\}：”“《》？]", " ", text.lower())
-    text = re.sub("import\s[a-zA-Z\.]+(\sas\s[a-zA-Z\.]+)\n", " ", text)
-    text = re.sub("\s+", " ", text)
+    text = re.sub(r"[,.:\"'\[\]\-=\+\\|!@#$%^&*();<>?/\uFF01\uFFE5\u2026\uFF08\uFF09\u2014\{\}\uFF1A\u201D\u201C\u300A\u300B\uFF1F]", " ", text.lower())
+    text = re.sub(r"import\s[a-zA-Z\.]+(\sas\s[a-zA-Z\.]+)\n", " ", text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
@@ -176,7 +176,7 @@ class MathRuleProxy:
             count_3 = solutions[i].count("<|begin_of_query|>")
             count_4 = solutions[i].count("<|end_of_query|>")
 
-            if "boxed" not in query: #现在来说这只是一个摆设
+            if "boxed" not in query:  # Placeholder branch kept for compatibility.
                 length_scores.append(0)
             else:
                 length_scores.append(0)
@@ -237,4 +237,5 @@ if __name__ == "__main__":
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
-# python /home/songhuatong/OpenRLHF/openrlhf/cli/server_rm_rag.py --data_path /home/songhuatong/OpenRLHF/data/hotpotqa_rollout_10 --reward_pretrain /home/songhuatong/Qwen2.5-1.5B-Instruct --log_file /home/songhuatong/RAG_RL/rewards/sampling.jsonl --port 1278 --host 127.0.0.1
+# Example:
+# python -m openrlhf.cli.server_rm_rag --data_path data/prompts --reward_pretrain Qwen/Qwen2.5-1.5B-Instruct --log_file logs/sampling.jsonl --port 1278 --host 127.0.0.1

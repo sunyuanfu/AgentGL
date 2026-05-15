@@ -9,7 +9,7 @@ import ray
 import torch
 from transformers.trainer import get_scheduler
 
-from openrlhf.datasets import PromptDataset, SFTDataset
+from openrlhf.datasets import LinkPredictionPromptDataset, PromptDataset, SFTDataset
 from openrlhf.models import Actor
 from openrlhf.trainer import PPOTrainer
 from openrlhf.trainer.ppo_utils import Experience, RemoteExperienceMaker
@@ -280,9 +280,12 @@ class ActorModelRayActor(BasePPORole):
             train_split=args.prompt_split,
         )
         prompts_data = prompts_data.select(range(min(args.max_samples, len(prompts_data))))
-        self.prompts_dataset = PromptDataset(
-            prompts_data, self.tokenizer, strategy, input_template=args.input_template
+        dataset_cls = (
+            LinkPredictionPromptDataset
+            if getattr(args, "graph_task", "node") == "link"
+            else PromptDataset
         )
+        self.prompts_dataset = dataset_cls(prompts_data, self.tokenizer, strategy, input_template=args.input_template)
         # kill
         self.prompts_dataloader = strategy.setup_dataloader(
             self.prompts_dataset, args.rollout_batch_size // strategy.world_size, True, True

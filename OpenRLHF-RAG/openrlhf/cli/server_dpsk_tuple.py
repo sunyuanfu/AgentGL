@@ -55,9 +55,9 @@ def extract_answer_math(s):
 
 
 def normalize_text(text):
-    text = re.sub("[,.:\"'\[\]\-=\+\\|!@#$%^&*();<>?/！￥…（）—\{\}：”“《》？]", " ", text.lower())
-    text = re.sub("import\s[a-zA-Z\.]+(\sas\s[a-zA-Z\.]+)\n", " ", text)
-    text = re.sub("\s+", " ", text)
+    text = re.sub(r"[,.:\"'\[\]\-=\+\\|!@#$%^&*();<>?/\uFF01\uFFE5\u2026\uFF08\uFF09\u2014\{\}\uFF1A\u201D\u201C\u300A\u300B\uFF1F]", " ", text.lower())
+    text = re.sub(r"import\s[a-zA-Z\.]+(\sas\s[a-zA-Z\.]+)\n", " ", text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
@@ -216,4 +216,5 @@ if __name__ == "__main__":
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
-# python /home/songhuatong/OpenRLHF/openrlhf/cli/server_dpsk_tuple.py --data_path /home/songhuatong/OpenRLHF/data/still_dataset --reward_pretrain /home/songhuatong/Qwen2.5-1.5B-Instruct --log_file /home/songhuatong/sampling.jsonl --port 1278 --host 127.0.0.1
+# Example:
+# python -m openrlhf.cli.server_dpsk_tuple --data_path data/prompts --reward_pretrain Qwen/Qwen2.5-1.5B-Instruct --log_file logs/sampling.jsonl --port 1278 --host 127.0.0.1

@@ -1,0 +1,26 @@
+{
+  "shared": {
+    "datasets": "ogbn-arxiv,amazon-photo,ogbn-products,amazon-computers,arxiv_2023,pubmed",
+    "eval_dir": "data/eval_set",
+    "graph_data_root": "node_data",
+    "graph_encoder_path": "all-roberta-large-v1",
+    "batch_size": 128,
+    "head": 10000
+  },
+  "runs": [
+    {
+      "name": "agentgl_nc_grpo_stage1",
+      "model": "outputs/ckpts/agentgl_nc_grpo_stage1",
+      "tokenizer": "outputs/ckpts/agentgl_nc_grpo_stage1",
+      "output_dir": "data/eval_results",
+      "output_suffix": "_agentgl_nc_grpo_stage1.jsonl"
+    },
+    {
+      "name": "agentgl_nc_grpo_stage2",
+      "model": "outputs/ckpts/agentgl_nc_grpo_stage2",
+      "tokenizer": "outputs/ckpts/agentgl_nc_grpo_stage2",
+      "output_dir": "data/eval_results",
+      "output_suffix": "_agentgl_nc_grpo_stage2.jsonl"
+    }
+  ]
+}

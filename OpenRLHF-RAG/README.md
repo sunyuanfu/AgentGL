@@ -25,7 +25,7 @@
 
 <hr>
 
-<span>[ English | <a href="README_zh.md">中文</a> ]</span>
+<span>[ English ]</span>
 
 OpenRLHF is a high-performance RLHF framework built on Ray, DeepSpeed and HF Transformers:
 

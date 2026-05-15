@@ -1,0 +1,27 @@
+# Runtime outputs
+logs/
+log/
+outputs/
+results/
+wandb/
+ray_results/
+
+# Local machine overrides
+config/local*.env
+*.local.env
+
+# Python/cache artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.cache/
+.pytest_cache/
+
+# Generated evaluation outputs
+data/*
+!data/.gitkeep
+
+# Editor/OS files
+.DS_Store
+.idea/
+.vscode/

@@ -2,7 +2,8 @@ import argparse
 import json
 import os
 import re
-from typing import List, Optional
+import math
+from typing import List, Optional, Tuple
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -17,14 +18,7 @@ THINK_PATTERN = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 QUERY_PATTERN = re.compile(r"<\|begin_of_query\|>.*?<\|end_of_query\|>", re.DOTALL)
 DOC_PATTERN = re.compile(r"<\|begin_of_documents\|>.*?<\|end_of_documents\|>", re.DOTALL)
 
-SEARCH_TAGS = {
-    "1-hop": "<|begin_of_query|>1-hop",
-    "2-hop": "<|begin_of_query|>2-hop",
-    "pagerank": "<|begin_of_query|>pagerank",
-    "similar": "<|begin_of_query|>similar",
-}
-
-MAX_RESPONSE_TOKENS = 2200
+MAX_RESPONSE_TOKENS = 2000
 
 
 def _normalize_label(text: str) -> str:
@@ -110,7 +104,7 @@ class GraphRewardServer:
         if not segments:
             return -0.3
 
-        threshold = 30
+        threshold = 80
         short_segments = 0
         for segment in segments:
             token_count = len(re.findall(r"\S+", segment))
@@ -122,45 +116,30 @@ class GraphRewardServer:
 
         return max(-0.2 * short_segments, -0.6)
 
-    # def _search_coverage_reward(self, response: str) -> float:
-    #     matches = QUERY_PATTERN.findall(response)
-    #     search_types: List[str] = []
-    #     for match in matches:
-    #         for name, tag in SEARCH_TAGS.items():
-    #             if match.startswith(tag):
-    #                 search_types.append(name)
-    #                 break
-    #     if not search_types:
-    #         return 0.0
-
-    #     limited = search_types[:5]
-    #     reward = 0.3 * len(limited)
-    #     if len(limited) >= len(SEARCH_TAGS) and len(set(limited)) == len(SEARCH_TAGS):
-    #         reward += 1.0
-    #     return reward
-    
-    def _search_coverage_reward(self, response: str) -> float:
-        coverage = 0.0
-        used_tags = set()
-        for name, tag in SEARCH_TAGS.items():
-            pattern = re.compile(re.escape(tag) + r".*?<\|end_of_query\|>", re.DOTALL)
-            if pattern.search(response or ""):
-                used_tags.add(name)
-        if used_tags:
-            coverage += 0.5 * len(used_tags)
-        return min(coverage, 2.0)
+    def _search_efficiency_reward(self, response: str, is_correct: bool) -> float:
+        if not is_correct:
+            return 0.0
+        search_count = response.count("<|begin_of_query|>")
+        ideal = 3
+        sigma = 1.5
+        diff = (search_count - ideal) / sigma
+        reward = 0.2 + 0.8 * math.exp(-0.5 * diff * diff)
+        if search_count < ideal:
+            reward = -0.2 * (ideal - search_count)
+        return 0.0
 
     def _length_penalty(self, response: str) -> float:
         token_count = len(re.findall(r"\S+", response or ""))
         return -0.5 if token_count > MAX_RESPONSE_TOKENS else 0.0
 
-    def _classification_reward(self, predicted: Optional[str], idx: int) -> float:
+    def _classification_reward(self, predicted: Optional[str], idx: int) -> Tuple[float, bool]:
         if predicted is None:
-            return -1.0
+            return -1.0, False
         if idx < 0 or idx >= len(self.labels):
-            return -0.5
+            return -0.5, False
         gold = self.labels[idx]
-        return 1.5 if _normalize_label(predicted) == _normalize_label(gold) else 0.0
+        is_correct = _normalize_label(predicted) == _normalize_label(gold)
+        return (1.5 if is_correct else 0.0), is_correct
 
     # ------------------------------------------------------------------
     # Public API
@@ -172,10 +151,11 @@ class GraphRewardServer:
         rewards: List[float] = []
         for response, idx in zip(responses, indices):
             answer = self._extract_answer(response)
-            reward = self._classification_reward(answer, int(idx))
+            classification_reward, is_correct = self._classification_reward(answer, int(idx))
+            reward = classification_reward
             reward += self._format_reward(response)
             reward += self._think_length_reward(response)
-            reward += self._search_coverage_reward(response)
+            reward += self._search_efficiency_reward(response, is_correct)
             reward += self._length_penalty(response)
             rewards.append(float(max(min(reward, 15.0), -15.0)))
 
