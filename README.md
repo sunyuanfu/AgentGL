@@ -7,6 +7,17 @@
 </p>
 
 <p align="center">
+  <a href="#overview">Overview</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#configuration">Configuration</a> •
+  <a href="#data-construction">Data Construction</a> •
+  <a href="#services">Services</a> •
+  <a href="#training-scripts">Training Scripts</a> •
+  <a href="#evaluation">Evaluation</a> •
+  <a href="#citation">Citation</a>
+</p>
+
+<p align="center">
   <img src="cover.png" alt="AgentGL overview" width="100%">
 </p>
 
