@@ -242,6 +242,8 @@ ray start --head --num-gpus 8 --port 8266 --dashboard-port 8267
 
 ## Training Scripts
 
+We use 8 h100 GPUs to finsih the training process.
+
 There are exactly eight release training scripts:
 
 | Task | Algorithm | Stage | Script |
