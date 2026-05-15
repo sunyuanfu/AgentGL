@@ -333,7 +333,7 @@ bash local_launchers/run_lp_grpo_stage2.sh
 
 ## Citation
 
-If you find AgentGL useful, please cite our paper:
+If you find AgentGL useful, please cite our paper💗:
 
 ```bibtex
 @article{sun2026agentgl,
