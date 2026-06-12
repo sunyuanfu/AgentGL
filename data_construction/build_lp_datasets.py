@@ -4,7 +4,7 @@ import os
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import torch
@@ -51,19 +51,6 @@ def load_node_texts(path: Path) -> List[str]:
     return texts
 
 
-def load_neighbor_list(path: Path) -> List[List[int]]:
-    raw = load_json(path)
-    if not isinstance(raw, list):
-        raise ValueError(f"{path} must contain a list")
-    cleaned: List[List[int]] = []
-    for entry in raw:
-        if isinstance(entry, list):
-            cleaned.append([int(x) for x in entry if isinstance(x, (int, float))])
-        else:
-            cleaned.append([])
-    return cleaned
-
-
 def resolve_edge_index(dataset: str, edge_dir: Path) -> Path:
     candidates = [
         edge_dir / f"{dataset}_edge_index.pt",
@@ -108,6 +95,17 @@ def canonical_edge_list(edge_index: np.ndarray) -> List[Tuple[int, int]]:
             a, b = b, a
         edges.add((a, b))
     return sorted(edges)
+
+
+def build_adjacency(num_nodes: int, edges: Sequence[Tuple[int, int]]) -> List[Set[int]]:
+    adjacency: List[Set[int]] = [set() for _ in range(num_nodes)]
+    for u, v in edges:
+        if u == v:
+            continue
+        if 0 <= u < num_nodes and 0 <= v < num_nodes:
+            adjacency[u].add(v)
+            adjacency[v].add(u)
+    return adjacency
 
 
 def sample_positive_edges(
@@ -227,21 +225,62 @@ def shuffle_by_difficulty(pairs: List[PairSample], rng: random.Random) -> List[P
     return ordered
 
 
-def _unique_sorted(seq: Sequence[int]) -> List[int]:
-    return sorted({int(x) for x in seq if isinstance(x, (int, float))})
+def _canonical_pair(u: int, v: int) -> Tuple[int, int]:
+    return (u, v) if u <= v else (v, u)
+
+
+def _pair_excluded_edge(pair: PairSample, adjacency: Sequence[Set[int]]) -> Optional[Tuple[int, int]]:
+    if pair.label != 1:
+        return None
+    u, v = pair.node_u, pair.node_v
+    if not (0 <= u < len(adjacency) and 0 <= v < len(adjacency)):
+        return None
+    if v not in adjacency[u]:
+        return None
+    return _canonical_pair(u, v)
+
+
+def _first_hop(
+    node: int,
+    adjacency: Sequence[Set[int]],
+    excluded_edge: Optional[Tuple[int, int]],
+) -> List[int]:
+    if node < 0 or node >= len(adjacency):
+        return []
+    neighbours = set(adjacency[node])
+    if excluded_edge is not None:
+        a, b = excluded_edge
+        if node == a:
+            neighbours.discard(b)
+        elif node == b:
+            neighbours.discard(a)
+    return sorted(neighbours)
+
+
+def _second_hop(
+    node: int,
+    adjacency: Sequence[Set[int]],
+    excluded_edge: Optional[Tuple[int, int]],
+) -> List[int]:
+    first = _first_hop(node, adjacency, excluded_edge)
+    second: Set[int] = set()
+    for neighbour in first:
+        second.update(_first_hop(neighbour, adjacency, excluded_edge))
+    second.discard(node)
+    return sorted(second)
 
 
 def build_neighbor_payload(
     pair: PairSample,
-    first_hop: Sequence[Sequence[int]],
-    second_hop: Sequence[Sequence[int]],
+    adjacency: Sequence[Set[int]],
 ) -> Dict[str, object]:
     u = pair.node_u
     v = pair.node_v
-    u_1hop = _unique_sorted(first_hop[u]) if 0 <= u < len(first_hop) else []
-    v_1hop = _unique_sorted(first_hop[v]) if 0 <= v < len(first_hop) else []
-    u_2hop = _unique_sorted(second_hop[u]) if 0 <= u < len(second_hop) else []
-    v_2hop = _unique_sorted(second_hop[v]) if 0 <= v < len(second_hop) else []
+    excluded_edge = _pair_excluded_edge(pair, adjacency)
+    u_1hop = _first_hop(u, adjacency, excluded_edge)
+    v_1hop = _first_hop(v, adjacency, excluded_edge)
+    u_2hop = _second_hop(u, adjacency, excluded_edge)
+    v_2hop = _second_hop(v, adjacency, excluded_edge)
     common_1 = sorted(set(u_1hop) & set(v_1hop))
     common_2 = sorted(set(u_2hop) & set(v_2hop))
     return {
@@ -259,8 +298,7 @@ def write_split_jsonl(
     split: str,
     output_dir: Path,
     pairs: Sequence[PairSample],
-    first_hop: Sequence[Sequence[int]],
-    second_hop: Sequence[Sequence[int]],
+    adjacency: Sequence[Set[int]],
 ) -> None:
     if not pairs:
         return
@@ -268,7 +306,7 @@ def write_split_jsonl(
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         for pair in pairs:
-            payload = build_neighbor_payload(pair, first_hop, second_hop)
+            payload = build_neighbor_payload(pair, adjacency)
             record = {
                 "pair_id": int(pair.pair_id if pair.pair_id is not None else -1),
                 "dataset": dataset,
@@ -284,20 +322,47 @@ def write_split_jsonl(
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def compute_pagerank_scores(
+    num_nodes: int,
+    edges: Sequence[Tuple[int, int]],
+    damping: float = 0.85,
+    max_iter: int = 100,
+    tol: float = 1.0e-8,
+) -> np.ndarray:
+    if num_nodes <= 0:
+        return np.zeros((0,), dtype=np.float32)
+    adjacency = build_adjacency(num_nodes, edges)
+    scores = np.full(num_nodes, 1.0 / num_nodes, dtype=np.float64)
+    teleport = (1.0 - damping) / num_nodes
+    for _ in range(max_iter):
+        next_scores = np.full(num_nodes, teleport, dtype=np.float64)
+        dangling_mass = 0.0
+        for node, neighbours in enumerate(adjacency):
+            if neighbours:
+                share = damping * scores[node] / len(neighbours)
+                for neighbour in neighbours:
+                    next_scores[neighbour] += share
+            else:
+                dangling_mass += scores[node]
+        if dangling_mass:
+            next_scores += damping * dangling_mass / num_nodes
+        if np.abs(next_scores - scores).sum() < tol:
+            scores = next_scores
+            break
+        scores = next_scores
+    return scores.astype(np.float32)
+
+
 def pagerank_top_pairs(
     dataset_dir: Path,
     dataset: str,
     edges: Sequence[Tuple[int, int]],
-    pagerank_path: Path,
-    exclude_edges: Set[Tuple[int, int]],
+    scores: np.ndarray,
 ) -> None:
-    if not pagerank_path.is_file():
+    if scores.size == 0:
         return
-    scores = np.load(pagerank_path)
     scored_edges: List[Tuple[float, Tuple[int, int]]] = []
     for edge in edges:
-        if edge in exclude_edges:
-            continue
         u, v = edge
         if u >= len(scores) or v >= len(scores):
             continue
@@ -498,9 +563,6 @@ def process_dataset(
         return
 
     node_texts = load_node_texts(dataset_dir / "node_texts.json")
-    first_hop = load_neighbor_list(dataset_dir / "first_hop_indices.json")
-    second_hop = load_neighbor_list(dataset_dir / "second_hop_indices.json")
-    pagerank_path = dataset_dir / "pagerank.npy"
     precomputed_emb = load_precomputed_embeddings(dataset_dir / "node_emb.npy")
     num_nodes = len(node_texts)
 
@@ -547,6 +609,10 @@ def process_dataset(
             rng,
         )
 
+    test_pos_set = set(test_pos_edges)
+    observed_positive_edges = [edge for edge in positive_pool if edge not in test_pos_set]
+    observed_adjacency = build_adjacency(num_nodes, observed_positive_edges)
+
     train_pairs: List[PairSample] = []
     test_pairs: List[PairSample] = []
 
@@ -567,7 +633,7 @@ def process_dataset(
     for pair in train_pairs + test_pairs:
         needed_nodes.add(pair.node_u)
         needed_nodes.add(pair.node_v)
-    for edge in positive_pool:
+    for edge in observed_positive_edges:
         needed_nodes.add(edge[0])
         needed_nodes.add(edge[1])
 
@@ -595,17 +661,16 @@ def process_dataset(
 
     assign_pair_vectors(train_pairs + test_pairs, embeddings)
 
-    test_pos_set = set(test_pos_edges)
-    reference_pool = build_reference_pool(positive_pool, test_pos_set, embeddings)
+    reference_pool = build_reference_pool(observed_positive_edges, set(), embeddings)
 
     attach_similar_pairs(reference_pool, train_pairs, cfg.similar_top_k, desc=f"{dataset} train similarity")
     attach_similar_pairs(reference_pool, test_pairs, cfg.similar_top_k, desc=f"{dataset} test similarity")
 
-    write_split_jsonl(dataset, "train", output_dir, train_pairs, first_hop, second_hop)
-    write_split_jsonl(dataset, "test", output_dir, test_pairs, first_hop, second_hop)
+    write_split_jsonl(dataset, "train", output_dir, train_pairs, observed_adjacency)
+    write_split_jsonl(dataset, "test", output_dir, test_pairs, observed_adjacency)
 
-    test_edge_set = set(test_pos_edges)
-    pagerank_top_pairs(output_dir / dataset, dataset, positive_pool, pagerank_path, test_edge_set)
+    pagerank_scores = compute_pagerank_scores(num_nodes, observed_positive_edges)
+    pagerank_top_pairs(output_dir / dataset, dataset, observed_positive_edges, pagerank_scores)
 
 
 def main() -> None:
